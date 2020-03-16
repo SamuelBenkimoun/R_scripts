@@ -6,11 +6,12 @@ list_csv <- list.files()
 # read the csv data
 data_csv <- lapply(list_csv, read.csv, header=TRUE, sep=",")
 # keeping only the spatial extent and the population data of each file
-data_csv <- lapply(data_csv, subset, select=c(Geometry, Crisis..People.Moving))
+data_csv2 <- lapply(data_csv, subset, select=c(Geometry, Crisis..People.Moving))
 # keeping only the tiles id and region name to be joined later (on the basis of geometry) to label the recordings
-data_csv2 <- lapply(data_csv, subset, select=c(Geometry, Starting.Region.Name, Ending.Region.Name, Starting.Location, Ending.Location))
+data_csv <- lapply(data_csv, subset, select=c(Geometry, Starting.Region.Name, Ending.Region.Name, Starting.Location, Ending.Location))
 # for the population rename the column by filename [date + hour] for further joint
 for (i in 1:length(data_csv)){colnames(data_csv[[i]])[4] <- substr(list_csv[i], 1, nchar(list_csv[i]) - 4)}
+# for (i in 1:length(data_csv)){colnames(data_csv[[i]])[4] <- as.character(data_csv[i]$Date.Time[[1]])} 
 # applying a left join by geometry to have every population data by time step for every spatial entity
 data_csv <- data_csv %>% reduce(left_join, by = "Geometry")
 # applying a left join by geometry to have all the labels ready
