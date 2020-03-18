@@ -26,4 +26,4 @@ data_csv2[is.na(data_csv2)] = 0
 # writing the resulting file in csv format
 # alternative possibility to remove the intra-mobility, if existing
 # data_csv2 <- subset(data_csv2, Starting.Location.x != Ending.Location.x)
-write.csv(data_csv2, file="../mobilites_tiles_joined.csv")
+write.csv(data_csv2, file="../mobilities_tiles_joined.csv")
