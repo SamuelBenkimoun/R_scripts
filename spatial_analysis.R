@@ -20,3 +20,14 @@ starting_pivot <- aggregate(cbind(semaine_starting[6:26]), by=list(group = semai
 semaine_ending$group = sapply(st_equals(semaine_ending), max)
 # creating a pivot table summarizing all the population flows by tile of destination
 ending_pivot <- aggregate(cbind(semaine_ending[6:26]), by=list(group = semaine_ending$group), FUN=sum)
+# extracting the locality names apart to join it with the pivot tables
+label_start <- subset(st_drop_geometry(semaine_starting), select = c("group", "Starting.Region.Name"))
+label_end <- subset(st_drop_geometry(semaine_ending), select = c("group", "Ending.Region.Name"))
+# removing the duplicates in both starting and ending localities
+duplicates_s <- which(duplicated(label_start))
+label_start <- label_start[-duplicates_s,]
+duplicates_e <- which(duplicated(label_end))
+label_end <- label_end[-duplicates_e,]
+# merging with the pivot tables
+starting_pivot <- merge(starting_pivot, label_start, by='group')
+ending_pivot <- merge(ending_pivot, label_end, by='group')
