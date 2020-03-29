@@ -269,3 +269,33 @@ for (i in 2:(length(ep_coords)-4)){
   )
 }
 
+# setting the filepath and names, and the order in which to assemble the images for the gif 
+png_order <- colnames(sp_coords[2:(length(sp_coords)-4)])
+path_png_s <- c(1:length(png_order))
+path_png_e <- c(1:length(png_order))
+for (i in 1:(length(png_order))){
+  path_png_s[i] <- (paste('./Outputs/Outgoing_Mobilities/', png_order[i], '.png', sep=""))
+  path_png_e[i] <- (paste('./Outputs/Incoming_Mobilities/', png_order[i], '.png', sep=""))
+}
+
+#reading the images and generating a gif at 1 image / 2 seconds
+png_data_s <- purrr::map(path_png_s, image_read)
+png_data_s <- image_join(png_data_s)
+animation_s <- image_animate(png_data_s, fps = 0.5)
+output_dir <- file.path('./Outputs/Outgoing_Mobilities', 'Gif')
+if (!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+}
+png_data_e <- purrr::map(path_png_e, image_read)
+png_data_e <- image_join(png_data_e)
+animation_e <- image_animate(png_data_e, fps = 0.5)
+output_dir <- file.path('./Outputs/Incoming_Mobilities', 'Gif')
+if (!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+}
+# writigin the gif generated in respective output folders
+image_write(animation_s, format = "gif", path= paste("./Outputs/Outgoing_Mobilities/Gif/",png_order[1],"-", png_order[length(png_order)],".gif", sep=""))
+image_write(animation_e, format = "gif", path= paste("./Outputs/Incoming_Mobilities/Gif/",png_order[1],"-", png_order[length(png_order)],".gif", sep=""))
+
