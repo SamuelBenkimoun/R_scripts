@@ -79,20 +79,19 @@ disc_e <- discretize(ep_coords[[2]], method = "cluster", breaks = 8, onlycuts = 
 sp_bb <- st_bbox(starting_pivot)
 ni.stamen <- get_stamenmap(c(left = sp_bb[[1]], bottom = sp_bb[[2]],right = sp_bb[[3]],top = sp_bb[[4]]), zoom = 7)
 
-# iterating to map all the timesteps of the dataset
+# iterating to map all the timesteps of the outgoing mobilities dataset
 for (i in 2:(length(sp_coords)-4)){
   print(colnames(sp_coords[i]))
   # redefining the category variable as per discretization previously established (to make results comparable)
-  sp_coords <- mutate(sp_coords, cat = cut(sp_coords[[i]], disc_s, dig.lab=6))
-  
+  sp_coords <- mutate(sp_coords, cat = cut(sp_coords[[i]], disc_s, dig.lab=6)) 
   # subset and ordering of 5000+ people tiles for dynamic labelling on the map
-  sp_coords3 <- subset(sp_coords, sp_coords[[i]]>5000)
+  sp_coords2 <- subset(sp_coords, sp_coords[[i]]>5000)
   # ordering the list so that the display priority for labelling goes to the most prolific tiles
-  sp_coords3 <- sp_coords3[order(sp_coords3[[i]], decreasing=TRUE),]
+  sp_coords2 <- sp_coords2[order(sp_coords2[[i]], decreasing=TRUE),]
   # mapping with the stamen background, and applying a logarithmic scale given the exponential profile of the distribution
   map <- ggmap(ni.stamen) + 
     geom_point(
-      data = sp, 
+      data = sp_coords, 
       mapping = aes(
         x = sp_coords$Longitude, 
         y = sp_coords$Latitude,
@@ -122,9 +121,11 @@ for (i in 2:(length(sp_coords)-4)){
     )+
     #integration of labels from the +5000 (or else) people tiles
     geom_text(
-      data= sp_coords3, 
+      data= sp_coords2, 
       aes(
-        label= paste(sp_coords3$Starting.Region.Name)), 
+        x = sp_coords2$Longitude, 
+        y = sp_coords2$Latitude,
+        label= paste(sp_coords2$Starting.Region.Name)), 
       colour="black",
       fontface = "bold",
       check_overlap = TRUE, 
@@ -166,10 +167,105 @@ for (i in 2:(length(sp_coords)-4)){
     paste(colnames(sp_coords[i]), ".png", sep=""), 
     plot=map, 
     device= "png", 
-    path= './Outputs/', 
+    path= './Outputs/Outgoing_Mobilities', 
     height = 676/38, #38 is the pixel/cm ratio
     width = 1000/38, 
     units = "cm"
     )
+}
+
+# iterating to map all the timesteps of the incoming mobilities dataset
+for (i in 2:(length(ep_coords)-4)){
+  print(colnames(ep_coords[i]))
+  # redefining the category variable as per discretization previously established (to make results comparable)
+  ep_coords <- mutate(ep_coords, cat = cut(ep_coords[[i]], disc_e, dig.lab=6)) 
+  # subset and ordering of 5000+ people tiles for dynamic labelling on the map
+  ep_coords2 <- subset(ep_coords, ep_coords[[i]]>5000)
+  # ordering the list so that the display priority for labelling goes to the most prolific tiles
+  ep_coords2 <- ep_coords2[order(ep_coords2[[i]], decreasing=TRUE),]
+  # mapping with the stamen background, and applying a logarithmic scale given the exponential profile of the distribution
+  map <- ggmap(ni.stamen) + 
+    geom_point(
+      data = ep_coords, 
+      mapping = aes(
+        x = ep_coords$Longitude, 
+        y = ep_coords$Latitude,
+        #colour = cat,
+        colour = log(ep_coords[[i]]),
+        shape="square"), 
+      alpha = .9
+    ) + 
+    # legend customization
+    guides(
+      shape=FALSE
+    ) + 
+    #scale_color_viridis_c() +
+    scale_color_gradient2(
+      low = "white", 
+      mid = "#fdeeee", 
+      high = "#c30000", 
+      na.value = "#ffffff", 
+      midpoint=median(log(ep_coords[[2]])), 
+      limits=c(0, 
+               max(log(ep_coords[[2]]))), 
+      labels=c(0,
+               as.integer(exp(2.5)), 
+               as.integer(exp(5)), 
+               as.integer(exp(7.5)), 
+               as.integer(exp(10)))
+    )+
+    #integration of labels from the +5000 (or else) people tiles
+    geom_text(
+      data= ep_coords2, 
+      aes(
+        x = ep_coords2$Longitude, 
+        y = ep_coords2$Latitude,
+        label= paste(ep_coords2$Ending.Region.Name)), 
+      colour="black",
+      fontface = "bold",
+      check_overlap = TRUE, 
+      nudge_y = -0.2, 
+      size=3.2
+    ) + 
+    #integration of the scalebar
+    ggsn::scalebar(
+      ending_pivot, 
+      dist = 100, 
+      dist_unit ='km', 
+      transform=TRUE, 
+      st.size=3, 
+      height=0.01, 
+      model = 'WGS84', 
+      location = "topright"
+    ) + 
+    # title with dynamic updating for each timestep
+    ggtitle(
+      "Sum of outgoing mobilities per tiles", 
+      subtitle=paste("Timestep (Day_hhmm):", colnames(ep_coords[i]), sep=" ")
+    ) + 
+    labs(
+      caption= "Projection: WGS84, Source: Facebook Data For Good, Stamen Maps", 
+      colour = "Number of people moving:"
+    )+ 
+    # adjustments on the axe and peripheric areas of the map
+    xlab("Longitude") + 
+    ylab("Latitude") + 
+    theme_classic() + 
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5), 
+      plot.subtitle = element_text(face = "italic", hjust = 0.5)
+    ) + 
+    scale_x_unit(unit = 'degrees') + 
+    scale_y_unit(unit= 'degrees')
+  # writing the maps in the output folder
+  ggsave(
+    paste(colnames(ep_coords[i]), ".png", sep=""), 
+    plot=map, 
+    device= "png", 
+    path= './Outputs/Incoming_Mobilities', 
+    height = 676/38, #38 is the pixel/cm ratio
+    width = 1000/38, 
+    units = "cm"
+  )
 }
 
