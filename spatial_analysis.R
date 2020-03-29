@@ -147,7 +147,7 @@ for (i in 2:(length(sp_coords)-4)){
     # title with dynamic updating for each timestep
     ggtitle(
       "Sum of outgoing mobilities per tiles", 
-      subtitle=paste("Timestep (Day_hhmm):", colnames(sp_coords[i]), sep=" ")
+      subtitle=paste("Timestep:", colnames(sp_coords[i]), sep=" ")
     ) + 
     labs(
       caption= "Projection: WGS84, Source: Facebook Data For Good, Stamen Maps", 
@@ -242,7 +242,7 @@ for (i in 2:(length(ep_coords)-4)){
     # title with dynamic updating for each timestep
     ggtitle(
       "Sum of outgoing mobilities per tiles", 
-      subtitle=paste("Timestep (Day_hhmm):", colnames(ep_coords[i]), sep=" ")
+      subtitle=paste("Timestep:", colnames(ep_coords[i]), sep=" ")
     ) + 
     labs(
       caption= "Projection: WGS84, Source: Facebook Data For Good, Stamen Maps", 
