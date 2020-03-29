@@ -295,7 +295,7 @@ if (!dir.exists(output_dir)){
   dir.create(output_dir)
 } else {
 }
-# writigin the gif generated in respective output folders
+# writing the gif generated in respective output folders
 image_write(animation_s, format = "gif", path= paste("./Outputs/Outgoing_Mobilities/Gif/",png_order[1],"-", png_order[length(png_order)],".gif", sep=""))
 image_write(animation_e, format = "gif", path= paste("./Outputs/Incoming_Mobilities/Gif/",png_order[1],"-", png_order[length(png_order)],".gif", sep=""))
 
