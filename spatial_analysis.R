@@ -167,7 +167,7 @@ for (i in 2:(length(sp_coords)-4)){
     plot=map, 
     device= "png", 
     path= './Outputs/', 
-    height = 676/38, 
+    height = 676/38, #38 is the pixel/cm ratio
     width = 1000/38, 
     units = "cm"
     )
