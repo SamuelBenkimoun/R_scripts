@@ -23,6 +23,7 @@ semaine_ending$Geometry <- st_line_sample(semaine$Geometry, sample = 1)
 
 # creating pivot tables by grouping similar geometries and making the sum of their incoming/outgoing population 
 semaine_starting$group = sapply(st_equals(semaine_starting), max)
+######LINES TO ADAPT WITH NUMBER OF COLUMNS FOR BOTH STARTING AND ENDING
 starting_pivot <- aggregate(cbind(semaine_starting[6:26]), by=list(group = semaine_starting$group), FUN=sum)
 semaine_ending$group = sapply(st_equals(semaine_ending), max)
 ending_pivot <- aggregate(cbind(semaine_ending[6:26]), by=list(group = semaine_ending$group), FUN=sum)
@@ -47,7 +48,7 @@ st_set_crs(ending_pivot, 4326)
 
 # extracting the coordinates to create an X and Y field in the pivot tables, in foster of ggplot formats
 sp_xy <- do.call(rbind, st_geometry(starting_pivot)) %>% as_tibble() %>% setNames(c("Longitude","Latitude"))
-sp_coords <- cbind(st_drop_geometry(starting_pivot), sp_coords)
+sp_coords <- cbind(st_drop_geometry(starting_pivot), sp_xy)
 ep_xy <- do.call(rbind, st_geometry(ending_pivot)) %>% as_tibble() %>% setNames(c("Longitude","Latitude"))
 ep_coords <- cbind(st_drop_geometry(ending_pivot),ep_xy)
 # creating the different directories for the output files
