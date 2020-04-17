@@ -8,6 +8,8 @@ list_csv <- list.files()
 data_csv <- lapply(list_csv, read.csv, header=TRUE, sep=",")
 # keeping only the spatial id and the population data of each file
 data_csv <- lapply(data_csv, subset, select=c(Spaco.Id, Crisis..People))
+# to keep only the part after the underscore (date and time) in the filename
+list_csv <- sub("^[^_]*_", "", list_csv)
 # for the population rename the column by filename [date + hour] for further joint
 for (i in 1:length(data_csv)){colnames(data_csv[[i]])[2] <- substr(list_csv[i], 1, nchar(list_csv[i]) - 4)}
 # applying a left join by spatial id to have every population data by time step for every spatial entity
