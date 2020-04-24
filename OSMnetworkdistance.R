@@ -3,6 +3,8 @@ library(httr)
 library(sf)
 library(stringr)
 library(osrm)
+library(reshape2)
+library(matrixStats)
 
 # reading the data
 Delhi_Tiles_till_2603 <- read_delim("Delhi Tiles Til 26 March 2020/Delhi_Tiles_till_2603.csv", 
@@ -43,3 +45,44 @@ dist <- str_match(dist, 'distance(.*?)w')[,2]
 dist <- parse_number(dist)
 dt[i,]$distance <-dist
 }
+
+dt$distance <- as.numeric(dt$distance)
+#in case there are NA values that would block mean calculation
+dt <- subset(dt, !is.na(dt$distance))
+
+#create a new dataframe to analyse the evolution of distance traveled by timestep, weighted by the number of people moving
+dm = data.frame(matrix(vector(), 0, 4,
+                       dimnames=list(c(), c("date", "mean_distance", "median_distance", "standard_deviation"))),
+                stringsAsFactors=F)
+j <- 1
+for (i in 5:(ncol(dt)-5)) {
+  dm[j,]$date <- colnames(dt[i])
+  dm[j,]$mean_distance <-  weighted.mean(dt$distance, dt[[i]])
+  dm[j,]$median_distance <-  weightedMedian(dt$distance, dt[[i]])
+  sdt <- aggregate(dt[[i]] ~ dist, data = dt, sum)
+  dm[j,]$standard_deviation <- sd(sdt[[2]])
+  j <- j+1
+}
+
+rownames(dm) <- c(1:nrow(dm))
+write.csv(dm, "./Delhi Tiles Til 26 March 2020/distances.csv")
+
+# plotting the graph of distance evolution
+ggplot(dm, 
+       aes(x=date, 
+           y=median_distance, 
+           group=1))+
+  labs(x="Date",
+       y="Mean of traveled distance (m)")+ 
+  ggtitle("Delhi NCR median of distance traveled")+
+  geom_text(label=as.integer(dm$median_distance),
+            colour="black",
+            fontface = "italic",
+            check_overlap = TRUE, 
+            nudge_y = +1, 
+            size=3.2
+            )+
+  scale_x_discrete(expand=c(0,0),
+                   breaks=c("2020.02.25.0530","2020.03.02.0530","2020.03.10.0530","2020.03.17.0530", "2020.03.22.0530"))+
+  geom_line()
+
