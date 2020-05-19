@@ -1,3 +1,7 @@
+library(readr)
+library(sf)
+library(stplanr)
+
 # Reding the files
 dt <- st_as_sf(Delhi_Tiles_till_2603, wkt = "Geometry")
 states <- st_read("./India States/Indian_States.shp")
