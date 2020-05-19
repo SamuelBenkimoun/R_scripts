@@ -20,9 +20,18 @@ x3 <- subset(x3, x3$st_nm == "NCT of Delhi" & x3$`x2$st_nm`== "NCT of Delhi")
 # refactor colnames
 names(x3) <- gsub(x = names(x3), pattern = "\\X", replacement = "") 
 names(x3) <- gsub(x = names(x3), pattern = "\\.", replacement = "-") 
-# writing results in single files for each timesteps
+###### CASE 1: Writing results in single files for each timesteps
 for (i in 7:ncol(x3)-2){
   timestep <- cbind(x3[1], x3[3:4], x3[i])
   colnames(timestep)[4] <- "moving_people"
   write.csv(timestep, paste("./",colnames(x3[i]), ".csv", sep=""))
+}
+###### CASE 2: LOOP WITH OD MATRIX TRANSORMATION ONE FILE PER TIMESTEP
+for (i in 8:ncol(x3)-2){
+  timestep <-  x3[c(1,2,i)]
+  timestep$start <- as.character(timestep$start)
+  timestep$end <- as.character(timestep$end)
+  od <- od_to_odmatrix(timestep)
+  od[is.na(od)] = 0
+  write.csv2(od, paste("./",colnames(x3[i]), ".csv", sep=""))
 }
