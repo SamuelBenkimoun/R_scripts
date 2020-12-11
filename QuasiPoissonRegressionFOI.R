@@ -1,7 +1,9 @@
 library(readxl)
+library(readr)
 library(dplyr)
 library(ggplot2)
 library(reshape2)
+library(MuMIn)
 options(scipen=999)
 #IMPORTING THE CASES DATA
 cases_US <- read_excel("covid_confirmed_usafacts2.xlsx")
@@ -62,17 +64,30 @@ colnames(pop_Sw)[2:3] <- c("Location", "Pop_Tot")
 pop_Fr <- read_excel("France_estim-pop-dep-sexe-gca-1975-2020.xls", sheet = "2020")
 colnames(pop_Fr)[1] <- c("dep")
 
+# fonction to estimate the AIC of a quasipoisson with a poisson residual structure
+x.quasipoisson <- function(...){
+  res <- quasipoisson(...)
+  res$aic <- poisson(...)$aic
+  res}
+
+# function to extract temporarily the dispersion parameter of the model
+dfun <- function(object) {
+  with(object,sum((weights * residuals^2)[weights > 0])/df.residual)
+}
+
 # USA Constituting the results tables  
 resulttable_US <- read.csv(text=("Date,P-value_FOI,P-value_Cases_week-1,P-value_Interaction, Dev_FOI, Dev_Cases_week-1, Dev_Interaction, Intercept, Coef_FOI, Coef_Cases-1, Coef_Inter, Pseudo-R2"))
 i <- 5
 j <- 1
-
-
+qaic_US <- read.csv(text=("Date, I, IC, ICF, ICFI"))
 for (i in 5:length(cases_US)) {
   poissondata <- left_join(cases_US[c(1,2,i, i+1)], FOI_US[c(3,i-1)], by= c("countyFIPS"="County"))%>%
     na.omit() %>%
     merge(select(pop_US, c("POPESTIMATE2019", "countyFIPS")))
+  
   resulttable_US[j,1] <- colnames(poissondata)[4]
+  qaic_US[j,1] <- colnames(poissondata)[4]
+  
   colnames(poissondata) <- c("county_id", "county_name", "cases_week_0", "cases_week_1", "logFOI_week_0", "population")
   model <- glm(formula=cases_week_1~logFOI_week_0+cases_week_0+cases_week_0:logFOI_week_0,
                family="quasipoisson", 
@@ -84,22 +99,38 @@ for (i in 5:length(cases_US)) {
   resulttable_US[j,5] <- anova(model)$Deviance[2]/anova(model)$'Resid. Dev'[1]*100
   resulttable_US[j,6] <- anova(model)$Deviance[3]/anova(model)$'Resid. Dev'[1]*100
   resulttable_US[j,7] <- anova(model)$Deviance[4]/anova(model)$'Resid. Dev'[1]*100
-  resulttable_US[j,8] <- coef(model)["(Intercept)"]
-  resulttable_US[j,9] <- coef(model)["logFOI_week_0"]
-  resulttable_US[j,10] <- coef(model)["cases_week_0"]
-  resulttable_US[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  #resulttable_US[j,8] <- coef(model)["(Intercept)"]
+  #resulttable_US[j,9] <- coef(model)["logFOI_week_0"]
+  #resulttable_US[j,10] <- coef(model)["cases_week_0"]
+  #resulttable_US[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  resulttable_US[j,8] <- std.coef(model, partial = TRUE)[1,1]
+  resulttable_US[j,9] <- std.coef(model, partial = TRUE)[2,1]
+  resulttable_US[j,10] <- std.coef(model, partial = TRUE)[3,1]
+  resulttable_US[j,11] <- std.coef(model, partial = TRUE)[4,1]
   resulttable_US[j,12] <- with(summary(model), 1 - deviance/null.deviance)
+  
+  model2 <- update(model,family="x.quasipoisson",na.action=na.fail)
+  gg <-  dredge(model2,rank="QAIC", chat=dfun(model2))
+  
+  qaic_US[j,2] <- gg["1",7]
+  qaic_US[j,3] <- gg["2",7]
+  qaic_US[j,4] <- gg["4",7]
+  qaic_US[j,5] <- gg["8",7]
+  
   j=j+1
 }
 
 # COLOMBIA Constituting the results tables
 resulttable_Col <- read.csv(text=("Date,P-value_FOI,P-value_Cases_week-1,P-value_Interaction, Dev_FOI, Dev_Cases_week-1, Dev_Interaction, Intercept, Coef_FOI, Coef_Cases-1, Coef_Inter, Pseudo-R2"))
+qaic_Col <- read.csv(text=("Date, I, IC, ICF, ICFI"))
+i <- 2
 j <- 1
 for (i in 2:length(cases_Col)) {
   poissondata <- left_join(cases_Col[c(1,i, i+1)], FOI_Col[c(2,i+2)], by= c("MCPIOS"="End MCPIOS"))%>%
     na.omit() %>%
     merge(select(pop_Col, c("MCPIOS", "POB2010")))
   resulttable_Col[j,1] <- colnames(poissondata)[3]
+  qaic_Col[j,1] <- colnames(poissondata)[3]
   colnames(poissondata) <- c("county_id", "cases_week_0", "cases_week_1", "logFOI_week_0", "population")
   model <- glm(formula=cases_week_1~logFOI_week_0+cases_week_0+cases_week_0:logFOI_week_0,
                family="quasipoisson", 
@@ -111,17 +142,31 @@ for (i in 2:length(cases_Col)) {
   resulttable_Col[j,5] <- anova(model)$Deviance[2]/anova(model)$'Resid. Dev'[1]*100
   resulttable_Col[j,6] <- anova(model)$Deviance[3]/anova(model)$'Resid. Dev'[1]*100
   resulttable_Col[j,7] <- anova(model)$Deviance[4]/anova(model)$'Resid. Dev'[1]*100
-  resulttable_Col[j,8] <- coef(model)["(Intercept)"]
-  resulttable_Col[j,9] <- coef(model)["logFOI_week_0"]
-  resulttable_Col[j,10] <- coef(model)["cases_week_0"]
-  resulttable_Col[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  #resulttable_US[j,8] <- coef(model)["(Intercept)"]
+  #resulttable_US[j,9] <- coef(model)["logFOI_week_0"]
+  #resulttable_US[j,10] <- coef(model)["cases_week_0"]
+  #resulttable_US[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  resulttable_US[j,8] <- std.coef(model, partial = TRUE)[1,1]
+  resulttable_US[j,9] <- std.coef(model, partial = TRUE)[2,1]
+  resulttable_US[j,10] <- std.coef(model, partial = TRUE)[3,1]
+  resulttable_US[j,11] <- std.coef(model, partial = TRUE)[4,1]
   resulttable_Col[j,12] <- with(summary(model), 1 - deviance/null.deviance)
+  
+  model2 <- update(model,family="x.quasipoisson",na.action=na.fail)
+  gg <-  dredge(model2,rank="QAIC", chat=dfun(model2))
+  
+  qaic_Col[j,2] <- gg["1",7]
+  qaic_Col[j,3] <- gg["2",7]
+  qaic_Col[j,4] <- gg["4",7]
+  qaic_Col[j,5] <- gg["8",7]
   
   j=j+1
 }
 
 # SWEDEN Constituting the results tables
 resulttable_Sw <- read.csv(text=("Date,P-value_FOI,P-value_Cases_week-1,P-value_Interaction, Dev_FOI, Dev_Cases_week-1, Dev_Interaction, Intercept, Coef_FOI, Coef_Cases-1, Coef_Inter, Pseudo-R2"))
+qaic_Sw <- read.csv(text=("Date, I, IC, ICF, ICFI"))
+
 i <- 2
 j <- 1
 for (i in 2:length(cases_Sw)) {
@@ -129,6 +174,7 @@ for (i in 2:length(cases_Sw)) {
     na.omit() %>%
     merge(select(pop_Sw, c("Location", "Pop_Tot")))
   resulttable_Sw[j,1] <- colnames(poissondata)[3]
+  qaic_Sw[j,1] <- colnames(poissondata)[3]
   colnames(poissondata) <- c("county_id", "cases_week_0", "cases_week_1", "logFOI_week_0", "population")
   model <- glm(formula=cases_week_1~logFOI_week_0+cases_week_0+cases_week_0:logFOI_week_0,
                family="quasipoisson", 
@@ -140,16 +186,31 @@ for (i in 2:length(cases_Sw)) {
   resulttable_Sw[j,5] <- anova(model)$Deviance[2]/anova(model)$'Resid. Dev'[1]*100
   resulttable_Sw[j,6] <- anova(model)$Deviance[3]/anova(model)$'Resid. Dev'[1]*100
   resulttable_Sw[j,7] <- anova(model)$Deviance[4]/anova(model)$'Resid. Dev'[1]*100
-  resulttable_Sw[j,8] <- coef(model)["(Intercept)"]
-  resulttable_Sw[j,9] <- coef(model)["logFOI_week_0"]
-  resulttable_Sw[j,10] <- coef(model)["cases_week_0"]
-  resulttable_Sw[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  #resulttable_US[j,8] <- coef(model)["(Intercept)"]
+  #resulttable_US[j,9] <- coef(model)["logFOI_week_0"]
+  #resulttable_US[j,10] <- coef(model)["cases_week_0"]
+  #resulttable_US[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  resulttable_US[j,8] <- std.coef(model, partial = TRUE)[1,1]
+  resulttable_US[j,9] <- std.coef(model, partial = TRUE)[2,1]
+  resulttable_US[j,10] <- std.coef(model, partial = TRUE)[3,1]
+  resulttable_US[j,11] <- std.coef(model, partial = TRUE)[4,1]
   resulttable_Sw[j,12] <- with(summary(model), 1 - deviance/null.deviance)
+  
+  model2 <- update(model,family="x.quasipoisson",na.action=na.fail)
+  gg <-  dredge(model2,rank="QAIC", chat=dfun(model2))
+  
+  qaic_Sw[j,2] <- gg["1",7]
+  qaic_Sw[j,3] <- gg["2",7]
+  qaic_Sw[j,4] <- gg["4",7]
+  qaic_Sw[j,5] <- gg["8",7]
+  
   j=j+1
 }
 
 # FRANCE Constituting the results tables
 resulttable_Fr <- read.csv(text=("Date,P-value_FOI,P-value_Cases_week-1,P-value_Interaction, Dev_FOI, Dev_Cases_week-1, Dev_Interaction, Intercept, Coef_FOI, Coef_Cases-1, Coef_Inter, Pseudo-R2"))
+corrtable_Fr <- read.csv(text=("Date, Pearson_cases0.1,P.value_FOI"))
+qaic_Fr <- read.csv(text=("Date, I, IC, ICF, ICFI"))
 i <- 2
 j <- 1
 for (i in 2:length(cases_Fr)) {
@@ -157,22 +218,39 @@ for (i in 2:length(cases_Fr)) {
     na.omit() %>%
     merge(select(pop_Fr, c("dep", "Total")))
   resulttable_Fr[j,1] <- colnames(poissondata)[3]
+  qaic_Fr[j,1] <- colnames(poissondata)[3]
+  corrtable_Fr[j,1] <- colnames(poissondata)[3]
   colnames(poissondata) <- c("county_id", "cases_week_0", "cases_week_1", "logFOI_week_0", "population")
+  corrtable_Fr[j,2] <- cor(poissondata$cases_week_0, poissondata$cases_week_1)
   model <- glm(formula=cases_week_1~logFOI_week_0+cases_week_0+cases_week_0:logFOI_week_0,
                family="quasipoisson", 
                data=poissondata, 
                offset = log(population))
+  corrtable_Fr[j,3] <- coef(summary(model))[2,4]
   resulttable_Fr[j,2] <- coef(summary(model))[2,4] #FOI
-  resulttable_Fr[j,3] <- coef(summary(model))[3,4] #Cases
+  resulttable_Fr[j,3]<- coef(summary(model))[3,4] #Cases
   resulttable_Fr[j,4] <- coef(summary(model))[4,4] #Interaction
   resulttable_Fr[j,5] <- anova(model)$Deviance[2]/anova(model)$'Resid. Dev'[1]*100
   resulttable_Fr[j,6] <- anova(model)$Deviance[3]/anova(model)$'Resid. Dev'[1]*100
   resulttable_Fr[j,7] <- anova(model)$Deviance[4]/anova(model)$'Resid. Dev'[1]*100
-  resulttable_Fr[j,8] <- coef(model)["(Intercept)"]
-  resulttable_Fr[j,9] <- coef(model)["logFOI_week_0"]
-  resulttable_Fr[j,10] <- coef(model)["cases_week_0"]
-  resulttable_Fr[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  #resulttable_US[j,8] <- coef(model)["(Intercept)"]
+  #resulttable_US[j,9] <- coef(model)["logFOI_week_0"]
+  #resulttable_US[j,10] <- coef(model)["cases_week_0"]
+  #resulttable_US[j,11] <- coef(model)["logFOI_week_0:cases_week_0"]
+  resulttable_US[j,8] <- std.coef(model, partial = TRUE)[1,1]
+  resulttable_US[j,9] <- std.coef(model, partial = TRUE)[2,1]
+  resulttable_US[j,10] <- std.coef(model, partial = TRUE)[3,1]
+  resulttable_US[j,11] <- std.coef(model, partial = TRUE)[4,1]
   resulttable_Fr[j,12] <- with(summary(model), 1 - deviance/null.deviance)
+  
+  model2 <- update(model,family="x.quasipoisson",na.action=na.fail)
+  gg <-  dredge(model2,rank="QAIC", chat=dfun(model2))
+  
+  qaic_Fr[j,2] <- gg["1",7]
+  qaic_Fr[j,3] <- gg["2",7]
+  qaic_Fr[j,4] <- gg["4",7]
+  qaic_Fr[j,5] <- gg["8",7]
+  
   j=j+1
 }
 
@@ -186,12 +264,20 @@ resulttable_Col$country='Colombia'
 resulttable_Sw$country='Sweden'
 resulttable_Fr$country='France'
 
+qaic_US$country='Westcoast - USA'
+qaic_Col$country='Colombia'
+qaic_Sw$country='Sweden'
+qaic_Fr$country='France'
+
 resulttable <- do.call("rbind", list(resulttable_US, resulttable_Col, resulttable_Sw, resulttable_Fr))
+qaictable <- do.call("rbind", list(qaic_US, qaic_Col, qaic_Sw, qaic_Fr))
+
+write.csv(qaictable, "./Quasipoisson/Quasi_AIC.csv")
 
 # SHARE OF DEVIANCE GRAPH
-long <- melt(resulttable[c(1,3,4,5,10)], id.vars = c("Date", "country"))
+long <- melt(resulttable[c(1,5,6,7,13)], id.vars = c("Date", "country"))
 long <- long[order(long$Date),]
-long$variable <- factor(long$variable, levels = c("Var_Interaction", "Dev_Cases_week.1", "Dev_FOI"))
+long$variable <- factor(long$variable, levels = c("Dev_Interaction", "Dev_Cases_week.1", "Dev_FOI"))
 ggplot(long, aes(x=Date, y=value, group=variable)) + 
   geom_area(aes(fill = variable))+
   theme(axis.text.x = element_text(angle = 90), plot.title = element_text(size=18, face="bold", hjust = 0.5))+
@@ -224,6 +310,7 @@ colnames(rt_Fr)[12] <- c("Total_cases")
 colnames(rt_Fr)[13] <- c("Total_mobilities")
 rt_Fr <- mutate(rt_Fr, Total_mobilities=Total_mobilities/max(rt_Fr$Total_mobilities))
 
+
 rt2 <- do.call("rbind", list(rt_US, rt_Col, rt_Sw, rt_Fr))
 coeff <- max(rt2$Total_cases)
 index_mob <- max(rt2$Total_mobilities)
@@ -252,6 +339,8 @@ ggplot(data=rt2, aes(Date, group=1))+
   ggtitle("Quasi-Poisson Coefficients")+
   facet_wrap(~ country)
 
+
+
 ## QUASI R2
 rt3 <- melt(rt2, id.var = c("Date", "country")) %>%
   #subset(variable==c("Coef_FOI", "Coef_Cases.1", "Coef_Inter", "Pseudo.R2"))%>%
@@ -261,4 +350,19 @@ ggplot(data=rt3, aes(x=Date, y=value, colour=country, group = country))+
   geom_hline(aes(yintercept=0.5), linetype="dashed", color = "red")+
   geom_line()+
   theme(axis.text.x = element_text(angle = 90), plot.title = element_text(size=18, face="bold", hjust = 0.5), legend.position="right")+
-  ggtitle("Quasi-Poisson Pseudo R2")
+  ggtitle("Quasi-Poisson Pseudo R2")+
+  facet_wrap(~ variable)
+
+## QUASI AIC
+long2 <- melt(qaictable, id.vars = c("Date", "country")) %>%
+  subset(variable!="I" & country == "Sweden") %>%
+  mutate(Date = as.Date(Date))
+  #mutate(Date=sapply(strsplit(long2$Date, split='2020-', fixed=TRUE),function(x) (x[2])))
+
+ggplot(data=long2, aes(x=Date, y=value, colour=variable, group = variable))+
+  geom_line()+
+  theme(axis.text.x = element_text(angle = 90, size=10), plot.title = element_text(size=18, face="bold", hjust = 0.5), legend.position="bottom",strip.text = element_text(size=14), legend.text = element_text(size=10))+
+  scale_color_manual(guide = "legend", name = "models", labels = c("Intercept + Cases week-1", "Intercept + Cases week-1 + Log Force of Infection", "Intercept + Cases week-1 + Log Force of Infection + Interaction cases-1:FOI"), values = c("blue", " dark green", "orange")) +
+  scale_x_date(date_breaks = "2 weeks", date_labels = '%D')+
+  ggtitle("Quasi-AIC")+
+  facet_wrap(~ country)
