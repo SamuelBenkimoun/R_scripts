@@ -52,5 +52,6 @@ rel_geom <- st_as_sf(rel_geom, sf_column_name = "geometry")
 class(rel_geom)
 #Mapping the ratio of sikh by subdistricts
 tm_shape(rel_geom)+
-  tm_polygons("r_sikh")
-#  tm_facets(by = "L1_NAME")
+  tmap_options(check.and.fix = TRUE)+
+  tm_polygons("r_sikh") +
+  tm_facets(by = "L1_NAME")
