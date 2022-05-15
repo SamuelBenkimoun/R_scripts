@@ -71,8 +71,52 @@ end$y <- st_coordinates(end)[,2]
 #Generating the point grid with the unique values of the flow extremeties
 tiles <- unique(start[c("x", "y")]) %>%
   rbind(unique(end[c("x", "y")])) %>%
-  unique() %>%
-  st_join(subd[c("L3_NAME", "L3_CODE")])
-#Creating the voronoi polygons from the point grid
-vor <- st_voronoi(st_combine(tiles))
-plot(vor, col=0)
+  unique() 
+#Creating the voronoi polygons from the point grid and joining L3 admin info
+tiles <- st_voronoi(st_combine(tiles)) %>%
+  st_collection_extract(type="POLYGON")%>%
+  st_as_sf() 
+plot(tiles)
+#Computing the surface and attributing an id key to the tiles
+tiles$surf_tile <- round(st_area(tiles),1)
+tiles$id_tile <- 1:nrow(tiles)
+
+## LINKING TILES TO THE MOVEMENT DATA ##
+#Attaching the tile id to the extremities of the movements flows
+start <- st_join(start, tiles["id_tile"])
+colnames(start)[14] <- "id_tile_start"
+end <- st_join(end, tiles["id_tile"])
+colnames(end)[14] <- "id_tile_end"
+#Getting both "from" and "to" tile id on a same file 
+mob_tiles <- cbind(dt_ua, st_drop_geometry(start[c("id_tile_start")]), st_drop_geometry(end[c("id_tile_end")]))
+#Aggregating the total incoming mobility by tile for each time-step and weekday/weekend
+ag_tiles <- aggregate(st_drop_geometry(mob_tiles[5:10]), by=list(To=mob_tiles$id_tile_start), FUN = sum) %>%
+  left_join(st_drop_geometry(tiles), by = c("To" = "id_tile"))
+
+## ADDING EPIDEMIOLOGICAL DATA INTO THE TILES ##
+#Importing the cases for the year 2008 and 2009 in Delhi NCT
+dengue_08 <- st_read("../EPIDEMIO_DATA_INDIA/Dengue 2008/Cas_dengue.shp") %>%
+  st_transform(3857)
+dengue_09 <- st_read("../EPIDEMIO_DATA_INDIA/Dengue 2009/Dengue_2009_utm_date_lite.shp") %>%
+  st_transform(3857)
+#Counting the number of cases per tile
+tiles$d08 <- lengths(st_intersects(tiles, dengue_08))
+tiles$d09 <- lengths(st_intersects(tiles, dengue_09))
+#Joining the state information to each tile, in order to later filter NCT tiles only
+tiles <- st_join(tiles, subd[c("L1_NAME")], k=1, join= st_nearest_feature)
+
+## ADDING THE POPULATION INFORMATION TO THE TILES ##
+#Importing the population from the Ward census of 2011
+wards_pop <- st_read("../WARD 2011/delhi_wards_pop2011_ok.shp") %>%
+  st_transform(3857) %>%
+  dplyr::select("id", "tot.pop") %>%
+  mutate(surf = st_area(geometry))
+#Intersecting the Wards layer, to reattribute the population to each tile proportionally to the overlapping surface 
+wards_inter <-  st_intersection(wards_pop, tiles) %>%
+  mutate(surf2 = st_area(geometry)) %>%
+  mutate(pop2 = tot.pop * (surf2/surf)) %>%
+  dplyr::select("id_tile", "pop2") 
+wards_inter <- aggregate(wards_inter$pop2, by= list(wards_inter$id_tile), FUN = sum)
+colnames(wards_inter) <- c("id_tile","pop_tile")
+#Joining the overlapping weighted Ward population data to the tiles
+tiles <- merge(tiles,wards_inter)
