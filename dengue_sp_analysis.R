@@ -6,7 +6,8 @@ library(lubridate)
 library(tmap)
 library(readr)
 library(tidyr)
-librar(readxl)
+library(readxl)
+library(igraph)
 options(scipen=999)
 ## IMPORTING AND FORMATING THE DATA ##
 setwd("../northern_india_nepal_and_pakistan_disease_prevention_map_may_29_2019_movement_between_administrative_regions/")
@@ -161,8 +162,39 @@ hh_inter <- aggregate(hh_inter[2:4], by= list(hh_inter$id_tile), FUN = sum) %>%
 colnames(hh_inter) <- c("id_tile", "hh_good", "tap", "drain") 
 tiles <- merge(tiles, hh_inter)
 
-## FILTERING NCT AREA AND MINIMUM MOVEMENT
+## FILTERING NCT AREA AND MINIMUM MOVEMENT ##
 tiles$min_mob <- apply(st_drop_geometry(tiles[11:16]), 1, FUN = min)
 tiles$max_mob <- apply(st_drop_geometry(tiles[11:16]), 1, FUN = max) 
 nct <- subset(tiles, L1_NAME == "NCT Of Delhi") %>%
   subset(min_mob > 10)
+
+## BUILDING THE GRAPH FOR CENTRALITY COMPUTATION ## 
+# Attaching the Sub-district of belonging (largest overlap) to help locate the tiles
+tiles <- st_join(tiles, subd["L3_NAME"], k=1, join= st_intersects, largest=TRUE)
+# Building the graph with the movement network between tiles
+mtg <- left_join(mob_tiles, st_drop_geometry(tiles[c("id_tile","L3_NAME", "L1_NAME")]), by = c("id_tile_start" = "id_tile")) %>%
+  left_join(st_drop_geometry(tiles[c("id_tile","L3_NAME", "L1_NAME")]), by = c("id_tile_end" = "id_tile"))%>%
+  na.omit()
+# Labeling the edges with a name that comprises the subdistrict name and tile id, for convenience 
+mtg$start <-  paste(mtg$id_tile_start, mtg$L3_NAME.x, sep = "_")
+mtg$end <- paste(mtg$id_tile_end, mtg$L3_NAME.y, sep = "_")
+mtg <- st_drop_geometry(mtg)
+graph <- graph_from_data_frame(cbind(mtg[17:18], mtg[5:10]), directed = TRUE)
+#graph <- simplify(graph, remove.multiple = F, remove.loops = T) 
+plot(graph, edge.arrow.size=.4,vertex.label=NA, layout= layout_in_circle)
+# Creating a dataframe to stock the centrality indices values 
+tiles_index <- data_frame()
+tiles_index <- as.data.frame(cbind(unique(mtg$start),degree(graph))) %>%
+  cbind(as_tibble(betweenness(graph, directed = TRUE))) %>%
+  cbind(as_tibble(closeness(graph)))%>%
+  cbind(as_tibble(eigen_centrality(graph)$vector))
+rownames(tiles_index) <- 1:nrow(tiles_index)
+#Attributing a weight for the computation of centrality indices, here the value of the movement flow on weekdays mornings
+weight = E(graph)$wd.5h30am
+weight[weight == 0] <- 0.01
+E(graph)$weight <- weight
+tiles_index <- cbind(tiles_index, as_tibble(betweenness(graph, weight=weight, directed = TRUE))) %>%
+  cbind(as_tibble(closeness(graph, weight=weight)))
+colnames(tiles_index) <- c("id_tile","degree","betw","eigen","close","betw_w", "close_w")  
+tiles_index$id_tile <- as.numeric(gsub(".*?([0-9]+).*", "\\1", tiles_index$id_tile)) 
+
