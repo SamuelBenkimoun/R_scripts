@@ -160,3 +160,9 @@ hh_inter <- aggregate(hh_inter[2:4], by= list(hh_inter$id_tile), FUN = sum) %>%
   st_drop_geometry()
 colnames(hh_inter) <- c("id_tile", "hh_good", "tap", "drain") 
 tiles <- merge(tiles, hh_inter)
+
+## FILTERING NCT AREA AND MINIMUM MOVEMENT
+tiles$min_mob <- apply(st_drop_geometry(tiles[11:16]), 1, FUN = min)
+tiles$max_mob <- apply(st_drop_geometry(tiles[11:16]), 1, FUN = max) 
+nct <- subset(tiles, L1_NAME == "NCT Of Delhi") %>%
+  subset(min_mob > 10)
