@@ -6,6 +6,7 @@ library(lubridate)
 library(tmap)
 library(readr)
 library(tidyr)
+librar(readxl)
 options(scipen=999)
 ## IMPORTING AND FORMATING THE DATA ##
 setwd("../northern_india_nepal_and_pakistan_disease_prevention_map_may_29_2019_movement_between_administrative_regions/")
@@ -120,3 +121,42 @@ wards_inter <- aggregate(wards_inter$pop2, by= list(wards_inter$id_tile), FUN = 
 colnames(wards_inter) <- c("id_tile","pop_tile")
 #Joining the overlapping weighted Ward population data to the tiles
 tiles <- merge(tiles,wards_inter)
+
+## ATTACHING THE AVERAGE INCOMING MOBILITY DATA TO THE TILES ##
+tc <- ag_tiles[1:7] %>% 
+  rename(id_tile = To) %>% 
+  merge(x=tiles)
+tiles <- tc
+rm(tc)
+
+## ATTACHING THE HOUSEHOLD DATA TO THE TILES ##
+# Importing the data from the Census 2011 excel tables
+setwd("~/Households Equipments SDT DELHI/")
+list_csv <- list.files()
+hh <- lapply(list.files(), function (x) {
+  read_excel(x, skip = 6)
+})
+# Filtering the information at the most precise scale "Sub-dist" 
+hh <- lapply(hh, subset, grepl("Sub-Dist", `9`))
+hh <- lapply(hh, subset, `10` == "Total")
+hh <- do.call(rbind,hh)
+# Filtering the fields of interest with the research question, particularly water related, and formating
+hh <- hh[c(5,6,12,72,73,106)]
+colnames(hh) <- c("L3_CODE","L3_NAME", "hh_good", "tap_treated", "tap_untreated", "closed_drain")
+hh$L3_CODE <- as.numeric(hh$L3_CODE)
+# Grouping the tap fields, and computing the surface
+hh <- merge(subd,hh) %>%
+  dplyr::select(c("L3_CODE","L3_NAME", "hh_good", "tap_treated", "tap_untreated", "closed_drain")) %>%
+  mutate(tap = tap_treated + tap_untreated) %>%
+  mutate(surf = st_area(geometry))
+# Distributing the household data to the files proportionally to the overlapping surface
+hh_inter <-  st_intersection(hh, tiles) %>%
+  mutate(surf2 = st_area(geometry)) %>%
+  mutate(hh_good2 = hh_good * (surf2/surf_tile)) %>%
+  mutate(tap2 = tap * (surf2/surf_tile)) %>%
+  mutate(drain2 = closed_drain * (surf2/surf_tile)) %>%
+  dplyr::select("id_tile", "hh_good2", "tap2", "drain2") 
+hh_inter <- aggregate(hh_inter[2:4], by= list(hh_inter$id_tile), FUN = sum) %>%
+  st_drop_geometry()
+colnames(hh_inter) <- c("id_tile", "hh_good", "tap", "drain") 
+tiles <- merge(tiles, hh_inter)
