@@ -249,3 +249,6 @@ nct$class_mob <- as.factor(groupes.kmeans$cluster)
 # Fitting a glm of poisson family on both years of dengue data
 glm(data = nct, d08 ~ class_mob + close, family = poisson, offset = log(pop_tile)) %>% summary()
 glm(data = nct, d09 ~ class_mob + close, family = poisson, offset = log(pop_tile)) %>% summary()
+
+## EXPORTING THE FILE WITH THE CLASSES FOR GIS MAPPING
+st_write(st_as_sf(nct, wkt = "geometry"), "../Tiles_with_mob_kmeans/Tiles_with_mob_class.gpkg")
