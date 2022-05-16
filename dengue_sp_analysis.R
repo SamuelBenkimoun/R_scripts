@@ -8,6 +8,7 @@ library(readr)
 library(tidyr)
 library(readxl)
 library(igraph)
+library(ggplot2)
 options(scipen=999)
 ## IMPORTING AND FORMATING THE DATA ##
 setwd("../northern_india_nepal_and_pakistan_disease_prevention_map_may_29_2019_movement_between_administrative_regions/")
@@ -165,6 +166,7 @@ tiles <- merge(tiles, hh_inter)
 ## FILTERING NCT AREA AND MINIMUM MOVEMENT ##
 tiles$min_mob <- apply(st_drop_geometry(tiles[11:16]), 1, FUN = min)
 tiles$max_mob <- apply(st_drop_geometry(tiles[11:16]), 1, FUN = max) 
+tiles <- st_join(tiles, subd["L3_NAME"], k=1, join= st_intersects, largest=TRUE)
 nct <- subset(tiles, L1_NAME == "NCT Of Delhi") %>%
   subset(min_mob > 10)
 
@@ -198,3 +200,52 @@ tiles_index <- cbind(tiles_index, as_tibble(betweenness(graph, weight=weight, di
 colnames(tiles_index) <- c("id_tile","degree","betw","eigen","close","betw_w", "close_w")  
 tiles_index$id_tile <- as.numeric(gsub(".*?([0-9]+).*", "\\1", tiles_index$id_tile)) 
 
+## GROUPING THE TILES WITH THEIR CENTRALITY INDICES##
+nct <- merge(nct, tiles_index)
+nct$degree <- as.numeric(nct$degree)
+nct <- subset(nct, !(L3_NAME %in% c("Ghaziabad","Sonipat","Dadri")))
+
+## MAKING A K-MEANS CLASSIFICATION ON THE INCOMING MOVEMENT VALUES PER TILES ##
+# Gathering the movement fields 
+d <- st_drop_geometry(nct[c(10:15)])
+# Possibly expressing the movement values in a relative way as compared to the cell's maximum value
+#d <- st_drop_geometry(nct[c(10:15,17)])
+#d <- sweep(d[, -(7)], 1, d[, 7], "/") 
+# Scaling the values to express it in standard deviation
+d <- scale(d, center=T,scale=T) 
+# Creating the groups (here 6) with k-means methods
+groupes.kmeans <- kmeans(d,centers=6,nstart=5)
+print(groupes.kmeans)
+
+## CREATING A PLOT TO DISPLAY THE AVERAGE PROFILE OF EACH CALSS ##
+# Renaming the groups for clarity when plotting (making appear the number of individuals for each group)
+classes1 <- groupes.kmeans$centers %>%
+  as.data.frame()
+classes1$class <- c(
+  paste('Class 1', " (", groupes.kmeans$size[1], ")"),
+  paste('Class 2', " (", groupes.kmeans$size[2], ")"),
+  paste('Class 3', " (", groupes.kmeans$size[3], ")"),
+  paste('Class 4', " (", groupes.kmeans$size[4], ")"),
+  paste('Class 5', " (", groupes.kmeans$size[5], ")"),
+  paste('Class 6', " (", groupes.kmeans$size[6], ")")
+  )
+# Converting the dataframe in long format for plotting purpose
+classes1_long <- gather(classes1, variable, value, -class)
+# Re-ordering the variables for it to appear in chronological order in the plot
+classes1_long$variable <- factor(classes1_long$variable, levels=c("wd.5h30am","wd.1h30pm","wd.9h30pm","m", "we.5h30am","we.1h30pm","we.9h30pm"))
+# Plotting the classes with the average profile of each group
+ggplot(classes1_long) +
+  geom_bar(aes(x = variable, y = value, fill = class),
+           stat = "identity") +
+  facet_wrap(~ class) +
+  geom_vline(xintercept=3.5)+
+  theme(strip.text = element_text(size=10, face = "bold"), legend.position = "none")+
+  #scale_fill_manual(values = c("#FF8000", "#EFD15C", "#28B50C", "#06B6DA"))
+  scale_color_brewer(palette = "PuOr")
+
+## MODEL TO ESTABLISH THE INFLUENCE OF THE MOVEMENT CLASSES AND CENTRALITY INDICES ON DENGUE INCIDENCE ##
+# Attaching the group belonging to each tile
+nct$class_mob <- as.factor(groupes.kmeans$cluster)
+# Fitting a glm of poisson family on both years of dengue data
+glm(data = nct, d08 ~ class_mob + close, family = poisson, offset = log(pop_tile)) %>% summary()
+glm(data = nct, d09 ~ class_mob + close, family = poisson, offset = log(pop_tile)) %>% summary()
