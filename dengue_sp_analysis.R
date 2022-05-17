@@ -262,8 +262,8 @@ ggsave(file="../plot_classes_tiles.svg", plot=plot)
 # Attaching the group belonging to each tile
 nct$class_mob <- as.factor(groupes.kmeans$cluster)
 # Fitting a glm of poisson family on both years of dengue data
-fit08 <- glm(data = nct, d08 ~ class_mob, family = poisson, offset = log(pop_tile)) 
-fit09 <- glm(data = nct, d09 ~ class_mob, family = poisson, offset = log(pop_tile))
+fit08 <- glm(data = nct, d08 ~ relevel(class_mob, ref = "6"), family = poisson, offset = log(pop_tile)) 
+fit09 <- glm(data = nct, d09 ~ relevel(class_mob, ref = "6"), family = poisson, offset = log(pop_tile))
 # Generating the latex code to format the regression tables
 stargazer::stargazer(fit08)
 stargazer::stargazer(fit09)
