@@ -9,6 +9,8 @@ library(tidyr)
 library(readxl)
 library(igraph)
 library(ggplot2)
+library(stargazer)
+library(ggthemes)
 options(scipen=999)
 ## IMPORTING AND FORMATING THE DATA ##
 setwd("../northern_india_nepal_and_pakistan_disease_prevention_map_may_29_2019_movement_between_administrative_regions/")
@@ -234,21 +236,37 @@ classes1_long <- gather(classes1, variable, value, -class)
 # Re-ordering the variables for it to appear in chronological order in the plot
 classes1_long$variable <- factor(classes1_long$variable, levels=c("wd.5h30am","wd.1h30pm","wd.9h30pm","m", "we.5h30am","we.1h30pm","we.9h30pm"))
 # Plotting the classes with the average profile of each group
-ggplot(classes1_long) +
+plot <- ggplot(classes1_long) +
   geom_bar(aes(x = variable, y = value, fill = class),
            stat = "identity") +
   facet_wrap(~ class) +
   geom_vline(xintercept=3.5)+
-  theme(strip.text = element_text(size=10, face = "bold"), legend.position = "none")+
-  #scale_fill_manual(values = c("#FF8000", "#EFD15C", "#28B50C", "#06B6DA"))
-  scale_color_brewer(palette = "PuOr")
+  theme_wsj()+ 
+  #scale_colour_wsj("colors6")+
+  theme(strip.text = element_text(size=11, face = "bold"),
+        panel.background = element_rect(fill = "white"),
+        plot.background = element_rect(fill = "white"),
+        #panel.grid.major = element_line(color="grey"),
+        legend.position = "none",
+        axis.title.y = element_text(size=14, face="bold"),
+        axis.text.y = element_text(size=9.5, face="bold"),
+        axis.text.x = element_text(size=9.5, face="bold"))+
+  xlab("") + 
+  ylab("Incoming movement (in s.d.)")+
+  scale_fill_brewer(palette = "Set2")
+plot(plot)
+# Exporting in vectorial format for any modification to bring externally to the plot 
+ggsave(file="../plot_classes_tiles.svg", plot=plot)
 
 ## MODEL TO ESTABLISH THE INFLUENCE OF THE MOVEMENT CLASSES AND CENTRALITY INDICES ON DENGUE INCIDENCE ##
 # Attaching the group belonging to each tile
 nct$class_mob <- as.factor(groupes.kmeans$cluster)
 # Fitting a glm of poisson family on both years of dengue data
-glm(data = nct, d08 ~ class_mob + close, family = poisson, offset = log(pop_tile)) %>% summary()
-glm(data = nct, d09 ~ class_mob + close, family = poisson, offset = log(pop_tile)) %>% summary()
+fit08 <- glm(data = nct, d08 ~ class_mob, family = poisson, offset = log(pop_tile)) 
+fit09 <- glm(data = nct, d09 ~ class_mob, family = poisson, offset = log(pop_tile))
+# Generating the latex code to format the regression tables
+stargazer::stargazer(fit08)
+stargazer::stargazer(fit09)
 
 ## EXPORTING THE FILE WITH THE CLASSES FOR GIS MAPPING
 st_write(st_as_sf(nct, wkt = "geometry"), "../Tiles_with_mob_kmeans/Tiles_with_mob_class.gpkg")
