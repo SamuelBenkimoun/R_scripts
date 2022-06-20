@@ -34,5 +34,36 @@ survey$income <- factor(survey$income, levels = c("Less than 2,000 Rs/month",
 survey$colony <- as.factor(survey$colony)
 #Subset dataset removing some non-attributed values 
 survey <- subset(survey, house_status != "NA")
+#Restructuring the housing types and subseting to keep only the types with a sufficient size in the sample
+survey[survey$house_status=="Delhi Government Quarters",]$house_status <- "Government Quarters"
+survey[survey$house_status=="Central Government Quarters",]$house_status <- "Government Quarters"
+survey[survey$house_status=="Railway Colony Quarters",]$house_status <- "Government Quarters"
+survey[survey$house_status=="Department of Delhi Fire Services",]$house_status <- "Government Quarters"
+survey <- subset(survey, survey$house_status %in% c("Government Quarters", 
+                                   "DDA 1 : group housing", 
+                                   "DDA 2 : simple housing", 
+                                   "Private housing", 
+                                   "Private Resettlement", 
+                                   "Slum 1 : unauthorized colony", 
+                                   "Slum 2 : resettlement colony", 
+                                   "Urban Village"))
+#Plotting the share of declared access to green space or not by type of housing
+survey %>%
+  mutate(shared_green = as.character(shared_green)) %>%
+  count(house_status, shared_green) %>%
+  group_by(house_status) %>%
+  mutate(lab = paste0(round(prop.table(n) * 100, 2), '%')) %>%
+  ggplot(aes(house_status,n, fill=shared_green)) + 
+  geom_col() +
+  scale_fill_manual(name="Declared access to \na shared green space:",
+                    labels = c("No access", "Access"),
+                    values = c("LightGray", "MediumSeaGreen"))+
+  scale_x_discrete(labels= c("DDA: group housing", "DDA: simple housing","Government quarters","Private housing", "Private Resettlement", "Slum: unauthorized", "Slum: resettlement", "Urban village"))+
+  geom_text(aes(label=lab),position=position_stack(vjust = 0.5), size = 3) +
+  theme_linedraw() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_text(size = 10, face = "bold"))
                                 
                                  
