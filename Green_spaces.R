@@ -32,8 +32,14 @@ survey$income <- factor(survey$income, levels = c("Less than 2,000 Rs/month",
                                  "70,000 to 110,000",
                                  "110,000 and above"))
 survey$colony <- as.factor(survey$colony)
-#Subset dataset removing some non-attributed values 
+survey$religion <- as.factor(survey$religion)
+survey$house_status <- as.factor(survey$house_status)
+#Subset dataset removing some non-attributed values and outlier values
 survey <- subset(survey, house_status != "NA")
+survey <- subset(survey, survey$religion %in% c("Hindu", "Muslim", "Christian", "Sikh", "Jain"))
+survey <- subset(survey, survey$ST == 0)
+survey <- subset(survey, children_number < 12)
+survey <- subset(survey, euc_distance_park < 5000)
 #Restructuring the housing types and subseting to keep only the types with a sufficient size in the sample
 survey[survey$house_status=="Delhi Government Quarters",]$house_status <- "Government Quarters"
 survey[survey$house_status=="Central Government Quarters",]$house_status <- "Government Quarters"
@@ -47,6 +53,14 @@ survey <- subset(survey, survey$house_status %in% c("Government Quarters",
                                    "Slum 1 : unauthorized colony", 
                                    "Slum 2 : resettlement colony", 
                                    "Urban Village"))
+#Building the caste attribute from several binary fields
+survey$caste <- "General"
+survey$caste <- ifelse(survey$SC==1,"SC",ifelse(survey$OBC==1,"OBC", "General"))
+survey$caste <- as.factor(survey$caste)
+#Building distance to greenspace threshold variables
+survey$park250 <- ifelse(survey$euc_distance_park < 250,"1", "0")
+survey$park500 <- ifelse(survey$euc_distance_park < 500,"1", "0")
+
 #Plotting the share of declared access to green space or not by type of housing
 survey %>%
   mutate(shared_green = as.character(shared_green)) %>%
@@ -65,5 +79,10 @@ survey %>%
         axis.title.y = element_blank(),
         axis.text.x = element_text(size = 10, face = "bold"),
         axis.text.y = element_text(size = 10, face = "bold"))
-                                
-                                 
+
+#Fitting a regression model on the declared access to green space
+fit_green <- glm(shared_green ~ house_status + children_number + odour + incident + caste + religion + euc_distance_park, 
+    data = na.omit(survey[c("shared_green","house_status","children_number","odour","incident","caste","religion","euc_distance_park", "park250", "park500")]), 
+    family = binomial(link = "logit"))
+summary(fit_green)
+stargazer::stargazer(fit_green)
