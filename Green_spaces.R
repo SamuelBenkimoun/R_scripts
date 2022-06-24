@@ -1,6 +1,7 @@
 #Importing the required libraries
 library(readxl)
 library(dplyr)
+library(dotwhisker)
 #Importing the data file with the survey results
 survey <- read_excel("CHALLINEQ/Challineq_Geo_21apr2022.xlsx")
 #Keeping only a certain number of variables of interest
@@ -44,6 +45,7 @@ survey <- subset(survey, euc_distance_park < 5000)
 survey[survey$house_status=="Delhi Government Quarters",]$house_status <- "Government Quarters"
 survey[survey$house_status=="Central Government Quarters",]$house_status <- "Government Quarters"
 survey[survey$house_status=="Railway Colony Quarters",]$house_status <- "Government Quarters"
+survey[survey$house_status=="private housing",]$house_status <- "Private housing"
 survey[survey$house_status=="Department of Delhi Fire Services",]$house_status <- "Government Quarters"
 survey <- subset(survey, survey$house_status %in% c("Government Quarters", 
                                    "DDA 1 : group housing", 
@@ -60,6 +62,8 @@ survey$caste <- as.factor(survey$caste)
 #Building distance to greenspace threshold variables
 survey$park250 <- ifelse(survey$euc_distance_park < 250,"1", "0")
 survey$park500 <- ifelse(survey$euc_distance_park < 500,"1", "0")
+survey$nopark500 <- ifelse(survey$euc_distance_park > 500,"1", "0")
+
 
 #Plotting the share of declared access to green space or not by type of housing
 survey %>%
@@ -86,3 +90,17 @@ fit_green <- glm(shared_green ~ house_status + children_number + odour + inciden
     family = binomial(link = "logit"))
 summary(fit_green)
 stargazer::stargazer(fit_green)
+
+#Plotting the regression results
+dwplot(fit_green, show_intercept = FALSE,
+       model_order = c("Logistic regression"),
+       vline = geom_vline(
+         xintercept = 0,
+         colour = "grey60",
+         linetype = 2
+       )) +     
+  ggtitle("Predicting access to a shared green space")+
+  xlab("Coefficient Estimate") + ylab("") +
+  geom_segment(aes(x=conf.low,y=term,xend=conf.high,
+                   yend=term,colour=p.value<0.10))+
+  geom_point(aes(x=estimate,y=term,colour=p.value<0.10,size=.5))
