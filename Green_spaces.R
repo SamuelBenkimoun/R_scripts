@@ -46,6 +46,8 @@ survey[survey$house_status=="Delhi Government Quarters",]$house_status <- "Gover
 survey[survey$house_status=="Central Government Quarters",]$house_status <- "Government Quarters"
 survey[survey$house_status=="Railway Colony Quarters",]$house_status <- "Government Quarters"
 survey[survey$house_status=="private housing",]$house_status <- "Private housing"
+survey[survey$house_status=="private housing",]$house_status <- "Private housing"
+#survey$house_status <- droplevels(survey$house_status)
 survey[survey$house_status=="Department of Delhi Fire Services",]$house_status <- "Government Quarters"
 survey <- subset(survey, survey$house_status %in% c("Government Quarters", 
                                    "DDA 1 : group housing", 
@@ -85,11 +87,14 @@ survey %>%
         axis.text.y = element_text(size = 10, face = "bold"))
 
 #Fitting a regression model on the declared access to green space
-fit_green <- glm(shared_green ~ house_status + children_number + odour + incident + caste + religion + euc_distance_park, 
-    data = na.omit(survey[c("shared_green","house_status","children_number","odour","incident","caste","religion","euc_distance_park", "park250", "park500")]), 
+fit_green <- glm(shared_green ~ house_status + children_number + odour + incident + caste + religion + nopark500, 
+                 #+ nopark500:house_status, 
+    data = na.omit(survey[c("shared_green","house_status","children_number","odour","incident","caste","religion","euc_distance_park", "park250", "park500", "nopark500")]), 
     family = binomial(link = "logit"))
-summary(fit_green)
-stargazer::stargazer(fit_green)
+
+#Computing the ROC Curve and AUC
+prob = predict(fit_green, newdata = survey, type = "response")
+auc = roc(survey$shared_green ~ prob, plot = TRUE, print.auc = TRUE)
 
 #Plotting the regression results
 dwplot(fit_green, show_intercept = FALSE,
@@ -99,8 +104,12 @@ dwplot(fit_green, show_intercept = FALSE,
          colour = "grey60",
          linetype = 2
        )) +     
-  ggtitle("Predicting access to a shared green space")+
+  ggtitle("Determinants of the declared access to a shared green space")+
+  theme_minimal() +
   xlab("Coefficient Estimate") + ylab("") +
+  xlim(-5, 5) +
   geom_segment(aes(x=conf.low,y=term,xend=conf.high,
                    yend=term,colour=p.value<0.10))+
-  geom_point(aes(x=estimate,y=term,colour=p.value<0.10,size=.5))
+  geom_point(aes(x=estimate,y=term,colour=p.value<0.10,size=.5)) +
+  scale_color_manual(values = c("gray","gray","3d9f88")) +
+  theme(legend.position="bottom")
