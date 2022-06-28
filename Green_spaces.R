@@ -34,7 +34,6 @@ survey$income <- factor(survey$income, levels = c("Less than 2,000 Rs/month",
                                  "110,000 and above"))
 survey$colony <- as.factor(survey$colony)
 survey$religion <- as.factor(survey$religion)
-survey$house_status <- as.factor(survey$house_status)
 #Subset dataset removing some non-attributed values and outlier values
 survey <- subset(survey, house_status != "NA")
 survey <- subset(survey, survey$religion %in% c("Hindu", "Muslim", "Christian", "Sikh", "Jain"))
@@ -47,8 +46,9 @@ survey[survey$house_status=="Central Government Quarters",]$house_status <- "Gov
 survey[survey$house_status=="Railway Colony Quarters",]$house_status <- "Government Quarters"
 survey[survey$house_status=="private housing",]$house_status <- "Private housing"
 survey[survey$house_status=="private housing",]$house_status <- "Private housing"
-#survey$house_status <- droplevels(survey$house_status)
 survey[survey$house_status=="Department of Delhi Fire Services",]$house_status <- "Government Quarters"
+survey$house_status <- as.factor(survey$house_status)
+#survey$house_status <- droplevels(survey$house_status)
 survey <- subset(survey, survey$house_status %in% c("Government Quarters", 
                                    "DDA 1 : group housing", 
                                    "DDA 2 : simple housing", 
@@ -86,6 +86,12 @@ survey %>%
         axis.text.x = element_text(size = 10, face = "bold"),
         axis.text.y = element_text(size = 10, face = "bold"))
 
+#Establishing the baselines values
+survey <— survey %>%
+  mutate(religion=relevel(religion,ref="Hindu")) %>%
+  mutate(house_status=relevel(house_status,ref="Government Quarters")) %>%
+  mutate(caste=relevel(caste, ref="General"))
+
 #Fitting a regression model on the declared access to green space
 fit_green <- glm(shared_green ~ house_status + children_number + odour + incident + caste + religion + nopark500, 
                  #+ nopark500:house_status, 
@@ -106,10 +112,17 @@ dwplot(fit_green, show_intercept = FALSE,
        )) +     
   ggtitle("Determinants of the declared access to a shared green space")+
   theme_minimal() +
-  xlab("Coefficient Estimate") + ylab("") +
-  xlim(-5, 5) +
+  xlab("Coefficient Estimate (dot) with 95% Confidence Interval (segment)") + ylab("") +
+  xlim(-3, 3) +
   geom_segment(aes(x=conf.low,y=term,xend=conf.high,
                    yend=term,colour=p.value<0.10))+
   geom_point(aes(x=estimate,y=term,colour=p.value<0.10,size=.5)) +
-  scale_color_manual(values = c("gray","gray","3d9f88")) +
-  theme(legend.position="bottom")
+  geom_text(aes(x=estimate,y=term,
+                label = ifelse((exp(estimate)>1),
+                               paste("+",((round((exp(estimate)),2))-1)*100,"%", sep = ""),
+                               paste(((round((exp(estimate)),2))-1)*100,"%", sep = ""))), 
+            vjust=(-1), size=3.5)+
+  scale_color_manual(values = c("gray","gray","3d9f88"))+
+  theme(legend.position="right", 
+        legend.background = element_rect(colour = "grey80"),
+        plot.title = element_text(hjust = 0.5, face = "bold"))
