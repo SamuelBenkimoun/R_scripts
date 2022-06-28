@@ -108,21 +108,47 @@ dwplot(fit_green, show_intercept = FALSE,
        vline = geom_vline(
          xintercept = 0,
          colour = "grey60",
-         linetype = 2
-       )) +     
+         linetype = 2,
+         size=1.0
+       ))+
   ggtitle("Determinants of the declared access to a shared green space")+
   theme_minimal() +
-  xlab("Coefficient Estimate (dot) with 95% Confidence Interval (segment)") + ylab("") +
+  xlab("Coefficient Estimate (dot) with 95% Confidence Interval (segment) and % change on the odds of access (label)") + ylab("") +
   xlim(-3, 3) +
   geom_segment(aes(x=conf.low,y=term,xend=conf.high,
-                   yend=term,colour=p.value<0.10))+
+                   yend=term,colour=p.value<0.10, size = .2))+
   geom_point(aes(x=estimate,y=term,colour=p.value<0.10,size=.5)) +
-  geom_text(aes(x=estimate,y=term,
+  geom_label(aes(x=estimate,y=term,
                 label = ifelse((exp(estimate)>1),
                                paste("+",((round((exp(estimate)),2))-1)*100,"%", sep = ""),
                                paste(((round((exp(estimate)),2))-1)*100,"%", sep = ""))), 
-            vjust=(-1), size=3.5)+
+            vjust=(-1), 
+            size=3.5,
+            label.padding = unit(0.09, "lines"))+
   scale_color_manual(values = c("gray","gray","3d9f88"))+
+  scale_y_discrete(labels=
+                       c(
+                         "house_statusDDA 1 : group housing" = "DDA: group housing",
+                         "house_statusDDA 2 : simple housing" = "DDA: simple housing",
+                         "house_statusPrivate housing" = "Private housing",
+                         "house_statusPrivate Resettlement" = "Private resettlement",
+                         "house_statusSlum 1 : unauthorized colony" = "Slum: unauthorized",
+                         "house_statusSlum 2 : resettlement colony" = "Slum: resettlement",
+                         "house_statusUrban Village" = "Urban village",
+                         "children_number" = "Number of children",
+                         "odour" = "Unpleasant odour",
+                         "incident" = "Occurence of incident",    
+                         "casteOBC" = "Other Backward Class",
+                         "casteSC" = "Schedule Caste",
+                         "religionChristian" = "Christian",
+                         "religionJain" = "Jain",   
+                         "religionMuslim" = "Muslim",
+                         "religionSikh" = "Sikh",    
+                         "nopark5001" = "No park within 500m (OSM)"
+                       )
+                     )+
   theme(legend.position="right", 
         legend.background = element_rect(colour = "grey80"),
-        plot.title = element_text(hjust = 0.5, face = "bold"))
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.text.x = element_text(face="bold"),
+        axis.text.y = element_text(face="bold", size = 11)) 
