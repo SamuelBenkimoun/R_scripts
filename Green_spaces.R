@@ -103,6 +103,8 @@ prob = predict(fit_green, newdata = survey, type = "response")
 auc = roc(survey$shared_green ~ prob, plot = TRUE, print.auc = TRUE)
 
 #Plotting the regression results
+#plotting the results
+#{
 dwplot(fit_green, show_intercept = FALSE,
        model_order = c("Logistic regression"),
        vline = geom_vline(
@@ -113,8 +115,8 @@ dwplot(fit_green, show_intercept = FALSE,
        ))+
   ggtitle("Determinants of the declared access to a shared green space")+
   theme_minimal() +
-  xlab("Coefficient Estimate (dot) with 95% Confidence Interval (segment) and % change on the odds of access (label)") + ylab("") +
-  xlim(-3, 3) +
+  xlab("Coefficient Estimate (dot) with 95% Confidence Interval (segment)") + ylab("") +
+  #xlim(-3, 3) +
   geom_segment(aes(x=conf.low,y=term,xend=conf.high,
                    yend=term,colour=p.value<0.10, size = .2))+
   geom_point(aes(x=estimate,y=term,colour=p.value<0.10,size=.5)) +
@@ -124,7 +126,7 @@ dwplot(fit_green, show_intercept = FALSE,
                                paste(((round((exp(estimate)),2))-1)*100,"%", sep = ""))), 
             vjust=(-1), 
             size=3.5,
-            label.padding = unit(0.09, "lines"))+
+            label.padding = unit(0.09, "lines"), colour="DarkSlateGray")+
   scale_color_manual(values = c("gray","gray","3d9f88"))+
   scale_y_discrete(labels=
                        c(
@@ -147,8 +149,15 @@ dwplot(fit_green, show_intercept = FALSE,
                          "nopark5001" = "No park within 500m (OSM)"
                        )
                      )+
-  theme(legend.position="right", 
-        legend.background = element_rect(colour = "grey80"),
-        plot.title = element_text(hjust = 0.5, face = "bold"),
-        axis.text.x = element_text(face="bold"),
-        axis.text.y = element_text(face="bold", size = 11)) 
+  scale_x_continuous(breaks = seq(-3, 4, by = 0.5))+
+  theme(legend.position="none", 
+        #legend.background = element_rect(colour = "grey80"),
+        plot.title = element_text(hjust = 0.5, face = "bold", margin=margin(0,0,20,0)),
+        axis.text.x = element_text(face="bold", size = 10, margin=margin(0,0,10,0)),
+        axis.text.y = element_text(face="bold", size = 11))
+#}  %>%
+#  add_brackets(list(
+#    c("Housing status","DDA: group housing","DDA: simple housing","Private housing","Private resettlement", "Slum: unauthorized","Slum: resettlement","Urban village"),
+#    c("Household characteristics","Number of children","Other Backward Class","Schedule Caste","Christian","Jain","Muslim","Sikh"),
+#    c("Neighboring environment","Unpleasant odour","Occurence of incident","No park within 500m (OSM)")
+#  ), fontSize = 0.3) 
