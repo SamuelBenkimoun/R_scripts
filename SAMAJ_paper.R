@@ -9,6 +9,9 @@ library(ggdark)
 library(dplyr)
 library(reshape2)
 library(sf)
+library(corrr)
+library(FactoMineR)
+library(factoextra)
 # Disabling the scientific notation
 options(scipen=999)
 
@@ -190,3 +193,58 @@ data_csv <- merge(data_csv, rel[,c(3,10,86,87,88,89)]) %>%
 inter <- left_join(inter, data_csv, by = c("L3_NAME"="Name"))
 # Computing the rate of FB users locatable as compared to the census population
 inter <- mutate(inter, fb_ratio = users_int / ((area_int/area_sdt)*TOT_P))
+# Computing the density for further use
+inter <- mutate(inter, DENSITY = as.numeric(TOT_P/(area_sdt*0.000001)))
+
+# To look at the pairwise correlation of Facebook users with the other census variables
+correl <- inter[6:33] %>% 
+  #inter2[c(6:28,30:40)] %>%
+  st_drop_geometry() %>% 
+  mutate(fb_ratio = as.numeric(fb_ratio)) %>% 
+  correlate() %>%
+  as.data.frame() %>%
+  dplyr::select(c("term","fb_ratio"))
+
+########################################TO DELETE POTENTIALLY#####################################
+## PCA ON THE WHOLE DATASET ##
+variables <- c("P_06", "P_SC", "P_LIT", "MAIN_CL_P", "MAIN_AL_P", "MAIN_HH_P", "MAIN_OT_P", "MARGWORK_P", "WORK_RATE", "URB_RATE", "F_RATIO", "hindu", "muslim", "HH_GCONDITION", "DENSITY")
+res.pca <- PCA(st_drop_geometry(inter[variables]), scale.unit = TRUE, ncp = 5, graph = TRUE)
+fviz_pca_ind(res.pca)
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+# At the light of the different tests, reducing the number of variables the minimise the redundancy 
+variables_reduced <- c("MAIN_OT_P", "F_RATIO", "hindu","HH_GCONDITION", "P_06", "DENSITY")
+correlate(st_drop_geometry(inter[variables_reduced]))
+inter_red <- inter[c("L3_NAME",variables_reduced)] %>%
+  st_drop_geometry()
+########################################TO DELETE POTENTIALLY#####################################
+
+# Subsetting the needed time-steps from the mobility analysis over the lockdown period (scattered in several files)
+Delhi_Tiles_til_2603 <- read_delim("~/Delhi Tiles Til 26 March 2020/Delhi_Tiles_till_2603.csv", ";", escape_double = FALSE, trim_ws = TRUE)
+Delhi_Tiles_til_2603 <- Delhi_Tiles_til_2603[c(2,3,4,10,98)]
+
+# Importing the rest of mobility data for the continuation of the observation window (May and June 2020) and subsetting the dates and fields needed
+Delhi_Tiles_May <- read_csv("~/Delhi Tiles 2km from May 2020/Delhi Mvt Point/Delhi Coronavirus Disease Prevention Map Mar 21 2020 Id  Movement between Tiles__2020-05-08 0000.csv")
+Delhi_Tiles_May <-  Delhi_Tiles_May[c("geometry", "start_polygon_name", "end_polygon_name", "n_crisis")]
+colnames(Delhi_Tiles_May)[1] <- c("Geometry")
+colnames(Delhi_Tiles_May)[4] <- c("2020.05.08.0530")
+
+Delhi_Tiles_May2 <- read_csv("~/Delhi Tiles 2km from May 2020/Delhi Mvt Point/Delhi Coronavirus Disease Prevention Map Mar 21 2020 Id  Movement between Tiles__2020-05-26 0000.csv")
+Delhi_Tiles_May2 <-  Delhi_Tiles_May2[c("geometry", "start_polygon_name", "end_polygon_name", "n_crisis")]
+colnames(Delhi_Tiles_May2)[1] <- c("Geometry")
+colnames(Delhi_Tiles_May2)[4] <- c("2020.05.26.0530")
+
+Delhi_Tiles_May3 <- read_csv("~/Delhi Tiles 2km from May 2020/Delhi Mvt Point/Delhi Coronavirus Disease Prevention Map Mar 21 2020 Id  Movement between Tiles__2020-06-22 0000.csv")
+Delhi_Tiles_May3 <-  Delhi_Tiles_May3[c("geometry", "start_polygon_name", "end_polygon_name", "n_crisis")]
+colnames(Delhi_Tiles_May3)[1] <- c("Geometry")
+colnames(Delhi_Tiles_May3)[4] <- c("2020.06.22.0530")
+
+# Merging all the different files in a single one
+mob_tiles <- merge(Delhi_Tiles_til_2603, Delhi_Tiles_May) %>%
+  merge(Delhi_Tiles_May2) %>%
+  merge(Delhi_Tiles_May3)
+# Adding the geometry to make is a spatial feature
+mob_tiles <- st_as_sf(mob_tiles, wkt = "Geometry")
+
+
+
