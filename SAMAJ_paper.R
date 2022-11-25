@@ -180,3 +180,13 @@ data_csv <- transform(data_csv, P_06 = P_06/TOT_P*100) %>%
   transform(MARGWORK_P = MARGWORK_P/TOT_WORK_P*100) %>%
   transform(NON_WORK_P = NON_WORK_P/TOT_P*100) %>%
   transform(WORK_RATE = TOT_WORK_P/TOT_P*100)
+# Given that some areas are finally not in the mobility dataset (50km radius approx), selection of the common areas with the Census data
+data_csv <- subset(data_csv, Name %in% mobility_areas) %>%
+  subset(!as.numeric(Subdistt) == 402)
+# Merging the different parts of the Census data (standard information, plus households equipment and religion tables) 
+data_csv <- merge(data_csv, rel[,c(3,10,86,87,88,89)]) %>%
+  merge(hh)
+# Joining the Census information to the geographical layer with the subdistricts and FB users information
+inter <- left_join(inter, data_csv, by = c("L3_NAME"="Name"))
+# Computing the rate of FB users locatable as compared to the census population
+inter <- mutate(inter, fb_ratio = users_int / ((area_int/area_sdt)*TOT_P))
