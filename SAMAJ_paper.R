@@ -2,8 +2,11 @@ library(readr)
 library(tidyr)
 library(lubridate)
 library(magrittr)
+library(ggplot2)
+library(ggdark)
 library(dplyr)
 library(reshape2)
+library(sf)
 
 
 #Disabling the scientific notation
@@ -57,39 +60,29 @@ image <- ggplot(dd, aes(x = date, y = jitter(people))) +
   scale_y_continuous(breaks = c(0,250,500,750,1000), sec.axis = sec_axis(~ . * 1000, name = "(Curve) Total movements in the area", breaks = c(0,250000,500000,750000,1000000)))
 ggsave(file="../../Rplot_FB2kmDelhi.svg", plot=image, width=10, height=8)
 
-#Setting the working directory where the other csv dataset is
+# Setting working directory where to get a more recent dataset to compute the FB users ratio in a post-lockdown context
 setwd("~/FB India Mobilities Between Tiles 2021 /Delhi Coronavirus Disease Prevention Map Mar 21 2020 Mobility Between Tiles")
-#List all the file and read the csv data
+# Read the csv data
 list_csv <- list.files()
 data_csv <- lapply(list_csv, read.csv, header=TRUE, sep=",")
-# Separate the spatial information in another list, in order to extract all movement flow combinations on the observed time perio
-data_csv2 <- lapply(data_csv, subset, select=c(GEOMETRY, start_polygon_name, end_polygon_name, start_polygon_id, end_polygon_id, length_km))
-# Pasting all the list content vertically in one df
-data_csv2 <- do.call(rbind,data_csv2)
-# Identify lines with duplicates (i.e. redudant mobility combination)
-duplicates <- which(duplicated(data_csv2))
-# Remove them from the df, to have a reference df with all the locations
-data_csv2 <- data_csv2[-duplicates,]
-# In another list, we separate the information about number of people at each time step
-data_csv <- lapply(data_csv, subset, select=c(GEOMETRY, n_baseline))
-# To keep only the part after the underscore (date and time) in the filename
-#list_csv <- sub("^[^_]*_", "", list_csv)
-# We rename the population row by the time step date (if contained in the filename)
-for (i in 1:length(data_csv)){
-  colnames(data_csv[[i]])[2] <- substr(list_csv[i], 1, nchar(list_csv[i]) - 4)
-  }
-# Alternative loop in case the time step date in containted in the content of the file itself)
-# for (i in 1:length(data_csv2)){colnames(data_csv2[[i]])[3] <- as.character(data_csv2[[i]]$Date.Time[[1]])}
-# Loop to left join population information at each time step to the reference spatial df
-for (i in 1:length(data_csv)){
-  data_csv2 <- left_join(data_csv2, as.data.frame(data_csv[i]), by= c("GEOMETRY"="GEOMETRY"))
-  }
-# Replace all the NA values by 0
-data_csv2[is.na(data_csv2)] = 0
-# Rename the fields of dates
-colnames(data_csv2)[7:27] <- sub("^[^_]*_", "", colnames(data_csv2[7:27]))
-# To verify the spatial resolution
-min(subset(data_csv2, length_km != 0)$length_km)
-
-
-
+# Calculating the penetration rate, 30 nov 2021 3rd timestep
+users <- as.data.frame(data_csv[6])
+# Replacing NA values by 0
+users[is.na(users)] = 0
+# Summing all the incoming movements by destination
+users <- aggregate(users["n_baseline"], by = list(end_lon = users$end_lon, end_lat = users$end_lat, end_polygon_name = users$end_polygon_name), FUN = sum)
+# Creating the geometries for each destination (points)
+users <- st_as_sf(x = users, coords = c(x = "end_lon", y= "end_lat"), crs = 4326)
+# Create the voronoi polygons to recreate the tiles around the destination points
+v <- st_combine(st_geometry(users)) %>%
+  st_voronoi() %>%
+  st_collection_extract() %>%
+  st_make_valid()
+v <- v[unlist(st_intersects(users, v))]
+# Adding the attributes from the 31 nov movement dataset to the voronoi polygons
+pv <- st_set_geometry(users, v) %>%
+  st_make_valid()
+# Compute the area and removing the superfluous polygons on the edges
+pv$area <- st_area(pv)
+pv <- subset(pv, area < 3*min(pv$area))
+plot(pv)
