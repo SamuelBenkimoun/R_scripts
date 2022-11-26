@@ -13,6 +13,10 @@ library(corrr)
 library(FactoMineR)
 library(factoextra)
 library(igraph)
+library(MASS)
+library(stargazer)
+library(car)
+library(jtools)
 # Disabling the scientific notation
 options(scipen=999)
 
@@ -354,13 +358,69 @@ res.pca <- PCA(X = inter2[c(variables_reduced)] %>%
 
 ### FITTING A REGRESSION ON THE LEVEL OF MOVEMENT USING THE CENTRALITY INDICATORS AND CENSUS DATA OF THE SUBDISTRICTS AT EACH TIME STEP 
 L3_mob <- merge(inter2, L3_mob[c("L3_NAME", "X2020.02.26.0530", "X2020.03.26.0530", "X2020.05.08.0530", "X2020.05.26.0530", "X2020.06.22.0530")])
-# Scaling the density to avoid too much magnitude in the regression
-L3_mob <- mutate(L3_mob, DENSITY_c = as.numeric(scale(L3_mob$DENSITY)))
 #Converting the total movement values into an index from 0 to 100, based on a pre-lockdown baseline (26 feb)
 L3_mob[40:43] <- (sweep(L3_mob[,40:43], 1, L3_mob[,39], "/")*100) %>% 
   round(1)
-#Writing the file to map it in a GIS, as in Figure 5
+# Scaling the density to avoid too much magnitude in the regression
+L3_mob <- mutate(L3_mob, DENSITY_c = as.numeric(scale(L3_mob$DENSITY)))
+# Writing the file to map it in a GIS, as in Figure 5
 write_csv(L3_mob,"./Subdistrict_movements_base100.csv")
+# Fitting the model for all the time-steps after having checked the colinearity (vif) while optimising the AIC 
+fit2 <- lm(formula = X2020.03.26.0530 ~ P_06 + P_SC + MAIN_HH_P + RENTED + 
+             #MAIN_OT_P  +
+             w_eigen+
+             #URB_RATE+
+             HINDUS + 
+             F_RATIO + 
+             DENSITY_c + 
+             #COMP_INTERNET, 
+             #CAR,
+             SCOOTER, 
+            data = L3_mob)
+summary(fit2)
+stepAIC(fit2, direction="both")
+write_csv(tidy(fit2), "~/NCR_SUBD_Tables/26march2020.csv")
+summ(fit2, robust = "HC1", confint = TRUE)
+# Exporting the table for formatting in LateX as shown in Figure 6
+stargazer::stargazer(fit2)
+stargazer::stargazer(vif(fit2))
+# Updating the model with the next timestep variable and repeating the same process
+fit2 <- update(fit2, formula. = X2020.05.08.0530 ~ .)
+summ(fit2, robust = "HC1", confint = TRUE)
+stargazer::stargazer(fit2)
+write_csv(tidy(fit2), "~/NCR_SUBD_Tables/08may2020.csv")
+fit2 <- update(fit2, formula. = X2020.05.26.0530 ~ .)
+summ(fit2, robust = "HC1", confint = TRUE)
+stargazer::stargazer(fit2)
+write_csv(tidy(fit2), "~/NCR_SUBD_Tables/26may2020.csv")
+fit2 <- update(fit2, formula. = X2020.06.22.0530 ~ .)
+summ(fit2, robust = "HC1", confint = TRUE)
+stargazer::stargazer(fit2)
+write_csv(tidy(fit2), "~/NCR_SUBD_Tables/22june2020.csv")
+
+### FITTING THE REGRESSION ON FB RATIO THIS TIME AS IN FIGURE 11
+fit3 <- lm(formula = as.numeric(fb_ratio) * 100 ~ 
+             P_06 + 
+             P_SC + 
+             MAIN_HH_P + 
+             #RENTED + 
+             MAIN_OT_P  +
+             #URB_RATE+
+             #NON_WORK_P +
+             #MARGWORK_P +
+             HINDUS + 
+             F_RATIO + 
+             DENSITY + 
+             #MOBILE +
+             #COMP_INTERNET+
+             CAR,
+           #SCOOTER, 
+           data = L3_mob)
+summary(fit3)
+vif(fit3)
+stargazer::stargazer(fit3)
+write_csv(tidy(fit3), "~/NCR_SUBD_Tables/fb_ratio.csv")
+
 
 
 
