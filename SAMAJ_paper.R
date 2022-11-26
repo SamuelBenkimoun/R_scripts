@@ -421,6 +421,37 @@ vif(fit3)
 stargazer::stargazer(fit3)
 write_csv(tidy(fit3), "~/NCR_SUBD_Tables/fb_ratio.csv")
 
-
+### CREATING A K-MEANS CATEGORISATION TO MAP IT AND USE THOSE CATEGORIES FOR OD MATRIX ANALYSIS BETWEEN CATEGORIES
+# Selecting a reduced number of variables to make the classification easy to comprehend, but still using a diversity of variables (demographic, religious, land use and economic)
+variables_reduced <- c("F_RATIO", "HINDUS", "DENSITY", "COMP_INTERNET")
+res.pca <- PCA(X = L3_mob[c(variables_reduced)] %>%
+                 set_rownames(L3_mob$L3_NAME), 
+               scale.unit = TRUE, 
+               ncp = 5, 
+               graph = FALSE,
+               #quanti.sup=c(9:10)
+)
+# k-means classification using the axis of the PCA
+res.km <- kmeans(res.pca$ind$coord[,1:2],5,nstart=25)
+# Adding the group information to our sub- districts
+L3_mob$group <- res.km$cluster %>%
+  as.factor() 
+# Visualising our results (PCA plus groups being delineated)
+fviz_pca_biplot(res.pca, 
+                col.ind = as.factor(L3_mob$group),
+                palette = c("dodgerblue", "gold", "lightslategray", "red", "mediumseagreen", "orange", "violet"),
+                #palette = "jco",
+                addlabels = TRUE,
+                repel = TRUE,
+                addEllipses = TRUE,
+                ellipse.type = "convex",
+                col.var = "white",
+                invisible ="quanti.sup",
+                ggtheme = dark_theme_gray() +
+                  theme(plot.title = element_text(size=18, face="bold", hjust = 0.5),
+                        panel.grid.major = element_line(color = "grey30", size = 0.2),
+                        panel.grid.minor = element_line(color = "grey30", size = 0.2),
+                        axis.text=element_text(size=13),
+                        axis.title=element_text(size=13,face="bold")))
 
 
