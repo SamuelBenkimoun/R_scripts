@@ -266,7 +266,7 @@ mob_tiles$end_tile <- end$id_tile
 mob_tiles <- st_drop_geometry(mob_tiles)
 mob_tiles[,5:9][mob_tiles[, 5:9] == 0] <- 5
 
-########### AGGREGATING TOTAL OUTGOING MOBILITIES BY L3 ADMIN
+### AGGREGATING TOTAL OUTGOING MOBILITIES BY L3 ADMIN
 L3_mob <- aggregate(mob_tiles[5:9], by = list(id_tile=mob_tiles$start_tile), FUN=sum) %>% 
   as_tibble() %>% 
   merge(pv[c("id_tile")]) %>%
@@ -279,7 +279,7 @@ L3_mob[2:6] <- (sweep(L3_mob[,2:6], 1, L3_mob$ratio_int,FUN="*"))[1:5] %>%
   round(1)
 L3_mob <- aggregate(L3_mob[c(2:6)], by=list(L3_NAME=L3_mob$L3_NAME), FUN=sum)
 
-######ADDING THE CENTRALITY DEGREES OF ADMINS WITH NETWORK ORIENTED MOBILITIES
+### ADDING THE CENTRALITY DEGREES OF ADMINS WITH NETWORK ORIENTED MOBILITIES
 # Creating a table, specifying for each flow between tiles which share of the number of people should go to which L3 based on overlapping ratio (both in departure L3 and arrival L3)
 coeff_tiles <- st_intersection(pv, subset(subd,L3_NAME %in% mobility_areas)) %>%
   subset(!as.numeric(L3_CODE) == 402) %>%
@@ -332,5 +332,35 @@ L3_mob$page <- page_rank(net, weights = E(net)$'2020.02.26.0530')$vector*100
 L3_mob$eccentricity <- eccentricity(net)
 L3_mob[L3_mob$L3_NAME %in% c("Kharkhoda","Khekada"), "eccentricity"] <- max(L3_mob$eccentricity)+1
 L3_mob$cfg <- membership(cfg)
+
+### PCA ON THE SUBDISTRICTS INCLUDING CENSUS DATA AND CENTRALITY INDICATORS
+# Creating another dataset for PCA related manipulations
+inter2 <- inter %>%
+  st_drop_geometry() %>%
+  merge(st_drop_geometry(L3_mob[c("L3_NAME", "degree", "betwenness", "page", "eccentricity", "eigen")]))
+# Removing two sub-districts still insufficiently covered by movement data (to few users captured in our perimeter)
+inter2 <- subset(inter2,!(L3_NAME %in% c("Rewari", "Palwal", "Rohtak")))
+# Renaming some columns in a more explicit way
+colnames(inter2)[c(20,21,18,36,38)] <- c("HINDUS", "MUSLIMS", "OCCUPATION_RATE", "w_page", "w_eigen")
+# Selecting the variables of interest
+variables_reduced <- c("P_06", "P_SC", "P_LIT", "MAIN_CL_P", "MAIN_AL_P", "MAIN_HH_P", "MAIN_OT_P", "MARGWORK_P", "OCCUPATION_RATE", "URB_RATE", "F_RATIO", "HINDUS", "MUSLIMS", "HH_GCONDITION", "DENSITY", "RENTED", "SIX_MORE_HH" ,"COMP_INTERNET", "MOBILE", "SCOOTER", "CAR" ,"degree", "betwenness", "w_page", "eccentricity", "w_eigen")
+# PCA with a plot for the two main axis, used in Figure 3
+res.pca <- PCA(X = inter2[c(variables_reduced)] %>%
+                 set_rownames(inter2$L3_NAME), 
+               scale.unit = TRUE, 
+               ncp = 5, 
+               graph = TRUE
+)
+
+### FITTING A REGRESSION ON THE LEVEL OF MOVEMENT USING THE CENTRALITY INDICATORS AND CENSUS DATA OF THE SUBDISTRICTS AT EACH TIME STEP 
+L3_mob <- merge(inter2, L3_mob[c("L3_NAME", "X2020.02.26.0530", "X2020.03.26.0530", "X2020.05.08.0530", "X2020.05.26.0530", "X2020.06.22.0530")])
+# Scaling the density to avoid too much magnitude in the regression
+L3_mob <- mutate(L3_mob, DENSITY_c = as.numeric(scale(L3_mob$DENSITY)))
+#Converting the total movement values into an index from 0 to 100, based on a pre-lockdown baseline (26 feb)
+L3_mob[40:43] <- (sweep(L3_mob[,40:43], 1, L3_mob[,39], "/")*100) %>% 
+  round(1)
+#Writing the file to map it in a GIS, as in Figure 5
+write_csv(L3_mob,"./Subdistrict_movements_base100.csv")
+
 
 
