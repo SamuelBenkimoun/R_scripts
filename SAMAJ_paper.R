@@ -12,6 +12,7 @@ library(sf)
 library(corrr)
 library(FactoMineR)
 library(factoextra)
+library(igraph)
 # Disabling the scientific notation
 options(scipen=999)
 
@@ -246,5 +247,90 @@ mob_tiles <- merge(Delhi_Tiles_til_2603, Delhi_Tiles_May) %>%
 # Adding the geometry to make is a spatial feature
 mob_tiles <- st_as_sf(mob_tiles, wkt = "Geometry")
 
+#Keeping the origin of the flows to join the tile id
+start <- mob_tiles
+start$Geometry <- st_line_sample(mob_tiles$Geometry, sample = 0) 
+#joining the L3 level from the Census 2011
+start <- st_set_crs(start, 4326) %>% 
+  st_join(pv["id_tile"]) 
+#Keeping the destination of the flows to join the tile id
+end <- mob_tiles
+end$Geometry <- st_line_sample(mob_tiles$Geometry, sample = 1) 
+#joining the L3 level from the Census 2011
+end <- st_set_crs(end, 4326) %>% 
+  st_join(pv["id_tile"]) 
+#Joining both start and end information for category and sub-district name as per Census 2011 
+mob_tiles$start_tile <- start$id_tile
+mob_tiles$end_tile <- end$id_tile
+#Fixing artbitrarily the 0 values to 5, since it actually just means <10
+mob_tiles <- st_drop_geometry(mob_tiles)
+mob_tiles[,5:9][mob_tiles[, 5:9] == 0] <- 5
+
+########### AGGREGATING TOTAL OUTGOING MOBILITIES BY L3 ADMIN
+L3_mob <- aggregate(mob_tiles[5:9], by = list(id_tile=mob_tiles$start_tile), FUN=sum) %>% 
+  as_tibble() %>% 
+  merge(pv[c("id_tile")]) %>%
+  st_as_sf(crs = st_crs(4326)) %>%
+  mutate(area = st_area(.$geometry)) %>%
+  st_intersection(subd[c("L3_NAME", "L3_CODE")]) %>%
+  mutate(ratio_int = st_area(.$geometry)/area)
+# Distributing the number of outgoing movements using the pro-rata of overlapping (to switch from the 2km tile boundaries to sub-district boundaries)
+L3_mob[2:6] <- (sweep(L3_mob[,2:6], 1, L3_mob$ratio_int,FUN="*"))[1:5] %>% 
+  round(1)
+L3_mob <- aggregate(L3_mob[c(2:6)], by=list(L3_NAME=L3_mob$L3_NAME), FUN=sum)
+
+######ADDING THE CENTRALITY DEGREES OF ADMINS WITH NETWORK ORIENTED MOBILITIES
+# Creating a table, specifying for each flow between tiles which share of the number of people should go to which L3 based on overlapping ratio (both in departure L3 and arrival L3)
+coeff_tiles <- st_intersection(pv, subset(subd,L3_NAME %in% mobility_areas)) %>%
+  subset(!as.numeric(L3_CODE) == 402) %>%
+  mutate(area_int = st_area(.$geometry)) %>%
+  mutate(ratio_int_tile = area_int/area)
+# Creating the OD table between L3, applying the coefficients of overlapping from the origin and destination tiles
+network <- left_join(mob_tiles, st_drop_geometry(coeff_tiles[c("id_tile","ratio_int_tile","L3_NAME")]), by=c("start_tile"="id_tile")) %>% 
+  left_join(st_drop_geometry(coeff_tiles[c("id_tile","ratio_int_tile","L3_NAME")]), by=c("end_tile"="id_tile")) %>% 
+  mutate(coef_area = ratio_int_tile.x * ratio_int_tile.y)
+network[5:9] <- sweep(network[5:9],1, network$coef_area, FUN = "*") %>% 
+  round(1)
+# Removing areas that are not covered enough
+network <- aggregate(network[5:9], by = list(start=network$L3_NAME.x, end=network$L3_NAME.y), FUN=sum) %>%
+  subset(start %in% mobility_areas [! mobility_areas %in% c("Rewari","Rohtak","Palwal")]) %>%
+  subset(end %in% mobility_areas [! mobility_areas %in% c("Rewari","Rohtak","Palwal")])
+# Building the graph and computing various indicators of centrality and connectivity
+nodes <- st_drop_geometry(L3_mob) %>% 
+  mutate(L3_NAME = stringr::str_trunc(L3_NAME, 5, ellipsis = ""))
+links <- network %>% 
+  #subset(X2020.02.26.0530>15) %>%
+  #set_rownames(1:nrow(links)) %>%
+  mutate(start = stringr::str_trunc(start, 5, ellipsis = "")) %>%
+  mutate(end = stringr::str_trunc(end, 5, ellipsis = ""))
+net <- graph_from_data_frame(d=links, vertices=nodes, directed=T) 
+degree(net)
+ceb <- cluster_edge_betweenness(net)
+membership(ceb)[order(membership(ceb))]
+cfg <- cluster_fast_greedy(as.undirected(net))
+V(net)$community <- cfg$membership
+l <- layout_with_fr(net)
+l <- norm_coords(l, ymin=-5, ymax=5, xmin=-5, xmax=5)
+plot(cfg, as.undirected(net))
+plot(ceb,net, vertex.label=NA, edge.arrow.size=.02)
+plot(as.undirected(simplify(net, remove.loops = T)), 
+     edge.arrow.size=.02, 
+     edge.curved=0.1,
+     #vertex.size=V(net)$
+     vertex.color=V(net)$community,
+     vertex.frame.color="#555555",
+     vertex.label=V(net)$L3_NAME, 
+     vertex.label.color="black",
+     edge.width=log10(E(net)$'2020.02.26.0530'),
+     layout=layout_with_graphopt,
+     vertex.label.cex=.7)
+# Attaching the indicators computed for the "nodes" (=sub-districts) in the network analysis to the L3 table (which still contains the census information of the sub-districts)
+L3_mob$degree <- degree(net)
+L3_mob$betwenness <- betweenness(net)
+L3_mob$eigen <- eigen_centrality(net, weights = sqrt(E(net)$'2020.02.26.0530'))$vector
+L3_mob$page <- page_rank(net, weights = E(net)$'2020.02.26.0530')$vector*100
+L3_mob$eccentricity <- eccentricity(net)
+L3_mob[L3_mob$L3_NAME %in% c("Kharkhoda","Khekada"), "eccentricity"] <- max(L3_mob$eccentricity)+1
+L3_mob$cfg <- membership(cfg)
 
 
