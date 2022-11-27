@@ -476,12 +476,20 @@ net_cat <- aggregate(net_cat[3:7], by = list(From=net_cat$category.x, To=net_cat
 net_cat <- cbind(net_cat[1:2], sweep(net_cat[, -(1:3)], 1, net_cat[, 3], "/")*100) 
 # Converting the table to long format (ggplot friendly)
 net_cat <- gather(net_cat, variable, value, -c("From", "To"))
+# Reordering the factor levels to get a gradient from the peripheral to the central areas
+net_cat <- mutate(net_cat, From = factor(From, levels = c("Peripheral lower-end localities", "Peripheral intermediary localities", "Urban lower-end areas (M+)", "Urban wealthier localities", "Urban hyper central areas"))) %>%
+                    mutate(To = factor(To, levels = c("Peripheral lower-end localities", "Peripheral intermediary localities", "Urban lower-end areas (M+)", "Urban wealthier localities", "Urban hyper central areas")))
+#Changing the labels for the facets of the plot
+time.labs <- c("26 March 2020 (morning)","08 May 2020 (morning)","26 May 2020 (morning)","22 June 2020 (morning)")
+names(time.labs) <- c("2020.03.26.0530", "2020.05.08.0530", "2020.05.26.0530", "2020.06.22.0530")
 # Plotting the OD matrix by types of areas
-ggplot(data=subset(net_cat, variable != "X2020.02.26.0530"), aes(x=To, y=From, fill = value, group = 1))+
+ggplot(data=subset(net_cat, variable != "2020.02.26.0530"), aes(x=To, y=From, fill = value, group = 1))+
   geom_tile()+
   geom_text(aes(x=To, y=From, label = round(value, 1), fontface = "bold"), color = "white", size = 3.5) +
-  theme(axis.text.x = element_text(angle = 90), axis.ticks.x=element_blank(), axis.text.y = element_text(size = "10"), plot.title = element_text(size=18, face="bold", hjust = 0.5), legend.position="left", strip.text = element_text(size = 12, face = "bold.italic"))+
+  theme(axis.title=element_text(size=14,face="bold"), axis.text.x = element_text(angle = 90, size = 11), axis.ticks.x=element_blank(), axis.text.y = element_text(size = 12), plot.title = element_text(size=18, face="bold", hjust = 0.5), legend.position="left", strip.text = element_text(size = 12, face = "bold.italic"))+
   ggtitle("Exchange matrix among categories in Delhi metropoli")+
   scale_fill_viridis(discrete=FALSE, option = "viridis")+ 
-  guides( fill = FALSE)+
-  facet_wrap(~ variable)
+  guides( fill = "none")+
+  facet_wrap(~ variable,
+            labeller = labeller(variable=time.labs)
+            )
