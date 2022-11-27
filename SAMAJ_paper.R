@@ -17,6 +17,7 @@ library(MASS)
 library(stargazer)
 library(car)
 library(jtools)
+library(viridis)
 # Disabling the scientific notation
 options(scipen=999)
 
@@ -453,5 +454,34 @@ fviz_pca_biplot(res.pca,
                         panel.grid.minor = element_line(color = "grey30", size = 0.2),
                         axis.text=element_text(size=13),
                         axis.title=element_text(size=13,face="bold")))
+# Creating the equivalence table between the classification groups and a more comprehensive/analytic designation (numbers to be adapted after each classification)  
+df <- data.frame (group  = c(5,2,4,1,3),
+                  category = c("Urban hyper central areas", 
+                               "Peripheral lower-end localities",
+                               "Urban wealthier localities",
+                               'Urban lower-end areas (M+)',
+                               'Peripheral intermediary localities'
+                               #'Urban middle-range areas',
+                               #'Urban lower-end to intermediary areas'
+                  ))
+# Writing the resulting sub-district layer with their categories, to map it as on Figure 8
+write_csv(merge(inter2, df)[c("L3_NAME","group", "category")],"./L3_with_groups.csv")
 
-
+### ANALYSING THE EXCHANGES OF POPULATION BETWEEN TYPES OF AREAS THROUGH TIME, POST-LOCKDOWN (FIGURE 9)
+# Rereating the OD matrix, but aggregating the sub-districts by categories, to see between if some specific trends is observable in the volume of population travelling between different types of areas (socio-spatial distance/proximity)
+net_cat <- left_join(network, merge(L3_mob, df)[c("L3_NAME", "category")], by= c("start"="L3_NAME")) %>%
+  left_join(merge(L3_mob, df)[c("L3_NAME", "category")], by= c("end"="L3_NAME"))
+net_cat <- aggregate(net_cat[3:7], by = list(From=net_cat$category.x, To=net_cat$category.y), FUN=sum) 
+# Converting the numbers in %age of the pre-lockdown baseline
+net_cat <- cbind(net_cat[1:2], sweep(net_cat[, -(1:3)], 1, net_cat[, 3], "/")*100) 
+# Converting the table to long format (ggplot friendly)
+net_cat <- gather(net_cat, variable, value, -c("From", "To"))
+# Plotting the OD matrix by types of areas
+ggplot(data=subset(net_cat, variable != "X2020.02.26.0530"), aes(x=To, y=From, fill = value, group = 1))+
+  geom_tile()+
+  geom_text(aes(x=To, y=From, label = round(value, 1), fontface = "bold"), color = "white", size = 3.5) +
+  theme(axis.text.x = element_text(angle = 90), axis.ticks.x=element_blank(), axis.text.y = element_text(size = "10"), plot.title = element_text(size=18, face="bold", hjust = 0.5), legend.position="left", strip.text = element_text(size = 12, face = "bold.italic"))+
+  ggtitle("Exchange matrix among categories in Delhi metropoli")+
+  scale_fill_viridis(discrete=FALSE, option = "viridis")+ 
+  guides( fill = FALSE)+
+  facet_wrap(~ variable)
