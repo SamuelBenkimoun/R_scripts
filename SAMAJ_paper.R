@@ -487,7 +487,7 @@ ggplot(data=subset(net_cat, variable != "2020.02.26.0530"), aes(x=To, y=From, fi
   geom_tile()+
   geom_text(aes(x=To, y=From, label = round(value, 1), fontface = "bold"), color = "white", size = 3.5) +
   theme(axis.title=element_text(size=14,face="bold"), axis.text.x = element_text(angle = 90, size = 11), axis.ticks.x=element_blank(), axis.text.y = element_text(size = 12), plot.title = element_text(size=18, face="bold", hjust = 0.5), legend.position="left", strip.text = element_text(size = 12, face = "bold.italic"))+
-  ggtitle("Exchange matrix among categories in Delhi metropoli")+
+  ggtitle("Exchange matrix among categories in Delhi metropolitan area")+
   scale_fill_viridis(discrete=FALSE, option = "viridis")+ 
   guides( fill = "none")+
   facet_wrap(~ variable,
