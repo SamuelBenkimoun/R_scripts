@@ -41,3 +41,6 @@ comb <- comb[!duplicated(comb2),]
 
 # Final merging with the survey data
 Challineq_data <- left_join(x=Challineq_data[1:137], y=comb2, by = "ID")
+
+# Writing the file
+writexl::write_xlsx(Challineq_data, "../Challineq_with_pm_28Nov2023.xlsx")
