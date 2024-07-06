@@ -108,8 +108,6 @@ cd_sf$income_merged <- factor(cd_sf$income_merged, exclude=NULL, levels = c(
 # Get the bounding box of the convex hulls
 bbox <- st_bbox(convex)
 
-ord <- factor(aa$city, levels = c('Charlottesville', 'Richmond', 'Charlotte', 'Raleigh'))
-
 # Create a colorFactor palette including NA
 palette_income <- leaflet::colorFactor(
   palette = c(magma(9, direction = 1)),
