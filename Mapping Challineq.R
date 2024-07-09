@@ -9,7 +9,7 @@ library(mapview)
 library(htmlwidgets)
 library(webshot)
 library(viridis)
-
+library(ggridges)
 
 # Reading the survey data and the coordinates
 cd <- read_excel("Documents/Charbon/Challineq/Challineq_with_pm_28Nov2023 (1).xlsx")
@@ -117,7 +117,6 @@ palette_income <- leaflet::colorFactor(
   ordered = TRUE
 )
 
-
 # Create Leaflet map
 leaflet() %>%
   addProviderTiles(providers$CartoDB.Positron) %>%
@@ -156,6 +155,33 @@ leaflet() %>%
                     "30,000 to 50,000",
                     "50,000 to 70,000",
                     "70,000 to 110,000",
-                    "110,000 and above")), 
+                    "110,000 and above")),
+                  title = "Levels of monthly income by household (in rupees):",
                   position = 'topright') %>%
   addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
+
+# Transforming the count into percentages by areas
+colonies_percentage <-  cd_sf %>%
+  group_by(colony, income_merged) %>%
+  summarize(count = n()) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(percentage = (count / total) * 100) %>%
+  st_drop_geometry()
+
+# Facetted plot of the income distribution by areas
+ggplot(colonies_percentage, aes(x = income_merged, y = percentage, fill = income_merged)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  scale_fill_manual(values = palette_income(levels(cd_sf$income_merged))) +
+  labs(title = "Income Distribution by Surveyed Areas",
+       x = "Income Level",
+       y = "Percentage of Total",
+       fill = "Income Level") +
+  theme_minimal() +
+  theme(#axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.text.x = element_blank()) +
+  facet_wrap(~ colony, 
+             scales = "free_y",
+             #scales = "fixed"
+             )
