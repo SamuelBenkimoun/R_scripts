@@ -10,6 +10,7 @@ library(htmlwidgets)
 library(webshot)
 library(viridis)
 library(ggridges)
+library(ggplot2)
 
 # Reading the survey data and the coordinates
 cd <- read_excel("Documents/Charbon/Challineq/Challineq_with_pm_28Nov2023 (1).xlsx")
@@ -86,6 +87,7 @@ webshot("./challineq_areas.html", file = "./challineq_areas.png", vwidth = 1200,
 
 
 ## MAKING THE DIFFERENT MAPS BY ATTRIBUTE OF THE HOUSEHOLDS
+### INCOME
 
 # Create the map using the function, mapping 'income' attribute
 
@@ -117,7 +119,7 @@ palette_income <- leaflet::colorFactor(
   ordered = TRUE
 )
 
-# Create Leaflet map
+# Create Leaflet map for income
 leaflet() %>%
   addProviderTiles(providers$CartoDB.Positron) %>%
   addPolygons(data = nct, color = "black", weight = 4, fill = FALSE) %>%
@@ -180,8 +182,230 @@ ggplot(colonies_percentage, aes(x = income_merged, y = percentage, fill = income
        fill = "Income Level") +
   theme_minimal() +
   theme(#axis.text.x = element_text(angle = 45, hjust = 1), 
-        axis.text.x = element_blank()) +
+        axis.text.x = element_blank(),
+        strip.text = element_text(size = 9.5)) +
   facet_wrap(~ colony, 
              scales = "free_y",
              #scales = "fixed"
              )
+
+### RELIGION
+# Setting the religion attribute as a factor and with the right levels
+sub_religion <- cd_sf %>% subset(religion %in% c("Hindu", "Muslim", "Christian", "Sikh", "Jain", "Buddhist"))
+sub_religion <- mutate(sub_religion, religion = as.factor(religion))
+sub_religion$religion <- factor(sub_religion$religion, levels = c("Buddhist", "Christian", "Jain", "Sikh", "Muslim", "Hindu"))
+# Create a colorFactor palette including NA
+palette_rel <- leaflet::colorFactor(
+  palette = c("orange", "seagreen", "darkblue", "indianred", "mediumpurple", "yellow"),
+  domain = levels(sub_religion$religion),
+  #na.color = "gainsboro",
+  #levels = levels(cd_sf$income_merged),
+  ordered = TRUE
+)
+
+# Create Leaflet map for religion
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data = nct, color = "black", weight = 4, fill = FALSE) %>%
+  setView(lng = mean(st_coordinates(cd_sf)[, "X"]), 
+          lat = mean(st_coordinates(cd_sf)[, "Y"]), 
+          zoom = 11) %>%
+  fitBounds(lng1 = min(st_coordinates(convex)[, "X"]), 
+            lat1 = min(st_coordinates(convex)[, "Y"]), 
+            lng2 = max(st_coordinates(convex)[, "X"]), 
+            lat2 = max(st_coordinates(convex)[, "Y"])) %>%
+  addPolygons(data = convex, 
+              fillColor = NULL, 
+              color = "black",
+              weight = 2, 
+              fillOpacity = 0) %>%
+  addCircleMarkers(data = sub_religion, 
+                   radius = 2.5, 
+                   color = "black",
+                   weight = 0.1,
+                   fillColor = ~palette_rel(religion),  # Use palette_income directly
+                   fillOpacity = 0.7,
+                   popup = ~paste("Colony:", colony, "<br>", "Religion:", religion)) %>%
+  addLegendFactor(pal = palette_rel, 
+                  values = factor(sub_religion$religion, exclude=NULL, levels = c("Buddhist", "Christian", "Jain", "Sikh", "Muslim", "Hindu")),
+                  title = "Main religion by household:",
+                  position = 'topright') %>%
+  addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
+
+# Transforming the count into percentages by areas
+religion_percentage <-  sub_religion %>%
+  group_by(colony, religion) %>%
+  summarize(count = n()) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(percentage = (count / total) * 100) %>%
+  st_drop_geometry()
+
+# Facetted plot of the religion distribution by areas
+ggplot(religion_percentage, aes(x = religion, y = percentage, fill = religion)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  scale_fill_manual(values = palette_rel(levels(sub_religion$religion))) +
+  labs(title = "Main Religion in the Housheold by Surveyed Areas",
+       x = "Religion",
+       y = "Percentage of Total",
+       fill = "Religion:") +
+  theme_minimal() +
+  theme(#axis.text.x = element_text(angle = 45, hjust = 1), 
+    axis.text.x = element_blank(),
+    strip.text = element_text(size = 9.5)) +
+  facet_wrap(~ colony, 
+             scales = "free_y",
+             #scales = "fixed"
+  )
+
+
+### CASTE
+
+# Setting the religion attribute as a factor and with the right levels
+sub_caste <- cd_sf %>% subset(caste %in% c("Scheduled Tribe (ST)", "Scheduled Caste (SC)", "Other Backward Class (OBC)", "General", "NA"))
+sub_caste <- mutate(sub_caste, caste = as.factor(caste))
+sub_caste$caste <- factor(sub_caste$caste, levels = c("Scheduled Tribe (ST)", "Scheduled Caste (SC)", "Other Backward Class (OBC)", "General"))
+# Create a colorFactor palette including NA
+palette_caste <- leaflet::colorFactor(
+  palette = c("purple", "mediumblue", "indianred", "navajowhite"),
+  domain = levels(sub_caste$caste),
+  na.color = "gainsboro",
+  ordered = TRUE
+)
+
+# Create Leaflet map for religion
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data = nct, color = "black", weight = 4, fill = FALSE) %>%
+  setView(lng = mean(st_coordinates(cd_sf)[, "X"]), 
+          lat = mean(st_coordinates(cd_sf)[, "Y"]), 
+          zoom = 11) %>%
+  fitBounds(lng1 = min(st_coordinates(convex)[, "X"]), 
+            lat1 = min(st_coordinates(convex)[, "Y"]), 
+            lng2 = max(st_coordinates(convex)[, "X"]), 
+            lat2 = max(st_coordinates(convex)[, "Y"])) %>%
+  addPolygons(data = convex, 
+              fillColor = NULL, 
+              color = "black",
+              weight = 2, 
+              fillOpacity = 0) %>%
+  addCircleMarkers(data = sub_caste, 
+                   radius = 2.5, 
+                   color = "black",
+                   weight = 0.1,
+                   fillColor = ~palette_caste(caste),  # Use palette_income directly
+                   fillOpacity = 0.7,
+                   popup = ~paste("Colony:", colony, "<br>", "Caste:", caste)) %>%
+  addLegendFactor(pal = palette_caste, 
+                  values = factor(sub_caste$caste, exclude=NULL, levels = c("Scheduled Tribe (ST)", "Scheduled Caste (SC)", "Other Backward Class (OBC)", "General")),
+                  title = "Caste of the Household Head:",
+                  position = 'topright') %>%
+  addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
+
+
+# Transforming the count into percentages by areas
+caste_percentage <-  sub_caste %>%
+  group_by(colony, caste) %>%
+  summarize(count = n()) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(percentage = (count / total) * 100) %>%
+  st_drop_geometry()
+
+# Facetted plot of the caste distribution by areas
+ggplot(caste_percentage, aes(x = caste, y = percentage, fill = caste)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  scale_fill_manual(values = palette_caste(levels(sub_caste$caste))) +
+  labs(title = "Main caste in the Housheold by Surveyed Areas",
+       x = "caste",
+       y = "Percentage of Total",
+       fill = "Caste:") +
+  theme_minimal() +
+  theme(#axis.text.x = element_text(angle = 45, hjust = 1), 
+    axis.text.x = element_blank(),
+    strip.text = element_text(size = 9.5)) +
+  facet_wrap(~ colony, 
+             scales = "free_y",
+             #scales = "fixed"
+  )
+
+### SHARED GREEN-SPACE
+table(cd_sf$shared_green)
+table(cd_sf$garden)
+
+# Create a colorFactor palette including NA
+palette_green_space <- leaflet::colorFactor(
+  palette = c("indianred", "darkgreen"),
+  domain = c("No", "Yes"),
+  na.color = "gainsboro",
+  ordered = TRUE
+)
+
+# Computing the percentage of declared access to a shared green space by colony
+green_space_percentage <- cd_sf %>%
+  group_by(colony, shared_green) %>%
+  summarize(count = n()) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(percentage = (count / total) * 100) %>%
+  st_drop_geometry()
+
+# Adding the access to green space percentage to the convex enveloppes of the colonies for mapping
+convex <- merge(convex, 
+                subset(green_space_percentage, shared_green == "Yes"), 
+                by = "colony", all.x = TRUE)
+palette_convex <- colorNumeric(palette = "Greens", domain = convex$percentage)
+
+# Mapping the enveloppes and households with regards to the declared access to a shared greens space
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data = nct, color = "black", weight = 4, fill = FALSE) %>%
+  setView(lng = mean(st_coordinates(cd_sf)[, "X"]), 
+          lat = mean(st_coordinates(cd_sf)[, "Y"]), 
+          zoom = 11) %>%
+  fitBounds(lng1 = min(st_coordinates(convex)[, "X"]), 
+            lat1 = min(st_coordinates(convex)[, "Y"]), 
+            lng2 = max(st_coordinates(convex)[, "X"]), 
+            lat2 = max(st_coordinates(convex)[, "Y"])) %>%
+  addPolygons(data = convex, 
+              fillColor = ~palette_convex(percentage),  # Use the calculated percentage to color
+              color = "black",
+              weight = 2, 
+              fillOpacity = 0.6) %>%
+  addCircleMarkers(data = cd_sf, 
+                   radius = 2.5, 
+                   color = "black",
+                   weight = 0.1,
+                   fillColor = ~palette_green_space(shared_green),  # Use palette_green_space directly
+                   fillOpacity = 0.7,
+                   popup = ~paste("Colony:", colony, "<br>", "Green Space:", shared_green)) %>%
+  addLegendFactor(pal = palette_green_space, 
+                  values = factor(cd_sf$shared_green, exclude=NULL, levels = c("Yes", "No")),
+                  title = "Household declaring an access to a shared green space:",
+                  position = 'topright',
+                  shape = 'circle') %>%
+  addLegendNumeric(pal = palette_convex,
+                   values = convex$percentage,
+                   title = "Percentage of households declaring access by surveyed area:",
+                   position = 'topright') %>%
+  addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
+
+# Facetted plot of the green-space access by areas
+ggplot(green_space_percentage, aes(x = shared_green, y = percentage, fill = shared_green)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  scale_fill_manual(values = palette_green_space(levels(as.factor(cd_sf$shared_green)))) +
+  labs(title = "Declared Access to A Shared Green-Space by Surveyed Areas",
+       x = "Access",
+       y = "Percentage of Total",
+       fill = "Access:") +
+  theme_minimal() +
+  theme(#axis.text.x = element_text(angle = 45, hjust = 1), 
+    axis.text.x = element_blank(),
+    strip.text = element_text(size = 9.5)) +
+  facet_wrap(~ colony, 
+             scales = "free_y",
+             #scales = "fixed"
+  )
