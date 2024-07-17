@@ -88,8 +88,20 @@ webshot("./challineq_areas.html", file = "./challineq_areas.png", vwidth = 1200,
 
 ## MAKING THE DIFFERENT MAPS BY ATTRIBUTE OF THE HOUSEHOLDS
 ### INCOME
-
-# Create the map using the function, mapping 'income' attribute
+## Create the map using the function, mapping 'income' attribute
+# Review the levels of the income variable
+cd_sf$income <- factor(cd_sf$income, exclude=NULL, levels = c(
+  "Less than 2,000 Rs/month",
+  "2,000 to 6,000",
+  "6,000 to 10,000",
+  "10,000 to 20,000",
+  "20,000 to 30,000",
+  "30,000 to 40,000",
+  "40,000 to 50,000",
+  "50,000 to 60,000",
+  "60,000 to 70,000",
+  "70,000 to 110,000",
+  "110,000 and above"))
 
 # Create a new variable 'income_merged' to reduce the number of levels
 cd_sf$income_merged <- cd_sf$income
@@ -121,7 +133,8 @@ palette_income <- leaflet::colorFactor(
 
 # Create Leaflet map for income
 leaflet() %>%
-  addProviderTiles(providers$CartoDB.Positron) %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  #addProviderTiles(providers$CartoDB.Positron) %>%
   addPolygons(data = nct, color = "black", weight = 4, fill = FALSE) %>%
   setView(lng = mean(st_coordinates(cd_sf)[, "X"]), 
           lat = mean(st_coordinates(cd_sf)[, "Y"]), 
@@ -409,3 +422,56 @@ ggplot(green_space_percentage, aes(x = shared_green, y = percentage, fill = shar
              scales = "free_y",
              #scales = "fixed"
   )
+
+## COMPUTING INDICATORS RELATED TO THE VARIABLES
+## Income
+
+# Plotting with grouped bars and curves for within NCT and beyond NCT
+
+#ggplot(cd_sf %>% filter (!is.na(income_merged)), aes(x = income_merged)) +
+ggplot(cd_sf %>% filter (!is.na(income)), aes(x = income_french)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Income Levels",
+       x = "Declared Income Levels (1 dollar = 83,6 rupees [nominal] / 20,2 rupees [PPP]",
+       y = "Frequency") +
+  theme_minimal(base_family = "Avenir Next") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 18), 
+    plot.caption = element_text(hjust = 1), 
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", size = 11), # Rotating the x axis labels
+    panel.grid.major = element_line(color = "gray80", size = 0.5), 
+    panel.grid.minor = element_line(color = "gray90", size = 0.25) 
+  ) +
+  # Caption
+  labs(caption = "Source: CHALLINEQ dataset 2020-2022; Auteur: Samuel Benkimoun, 2024.") # Texte en bas indiquant la source
+
+# Isolating the data about income and area where the households are located
+data_income <- cd_sf %>% st_drop_geometry() %>% 
+  select(colony, income) %>% 
+  filter(!is.na(income))
+
+# Recode the income levels by ranking, where 1 is the smaller income bracket, and 9 the highest
+data_income <- data_income %>%
+  mutate(income_numeric = as.numeric(income))
+
+# Testing that the variable doesn't follow a normal distribution:
+shapiro.test(data_income$income_numeric) # here it doesn't, so the ANOVA might not be the preferred analysis
+
+# Running the ANOVA and checking the results (just in case)
+anova_result <- stats::aov(income_numeric ~ colony, data = data_income)
+summary(anova_result)
+
+# Kruskal test, non parametric alternative to the ANOVA test, to compare the average delcared income between the different areas and see whether there is significant difference between them
+kruskal <- kruskal.test(as.numeric(income_numeric) ~ colony, data = data_income)
+kruskal
+# Post-hoc Dunn test to check the pairs that significantly defer from one another
+dunn <- rstatix::dunn_test(income_numeric ~ colony, data = data_income, p.adjust.method = "bonferroni")
+View(dunn)
+
+# Having a look at the mean and standard deviation by area in order to map it, and get indications about spatial inequalities and heterogeneity
+data_income %>% 
+  group_by(colony) %>% 
+  summarise(mean=mean(income_numeric), sd=sd(income_numeric)) %>% 
+  print(n=41) %>% View()
+
+plot(merge(convex, data_income)["income_numeric"])
