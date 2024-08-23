@@ -188,7 +188,7 @@ ggplot(data = green_hab, aes(house_status,n, fill=access_green)) +
 
 # Regression
 cd_reg <- cd_sf[c("ID", "access_green","income","house_independant",
-                  "house_status", "common_entry", "odour","incident","children_number","SC","ST","OBC","General",
+                  "house_status", "common_entry", "odour", "PM2_5", "incident","children_number","SC","ST","OBC","General",
                   "Other","religion","colony", "euc_distance_park")] %>%
   na.omit() #shortlisting a certain set of varables to include in the regression, based on potential explanatory power
 #Reformat certain variables into binary values
@@ -266,7 +266,7 @@ cd_reg <- na.omit(cd_reg)
 #Fiting the regression model
 fit_green <- glm(access_green ~ house_status + 
                    #house_independant + common_entry + 
-                   children_number + odour + incident + caste + religion + 
+                   children_number + odour + PM2_5 + incident + caste + religion + 
                    nopark500 +
                    #nopark250 +
                    #nopark500Google +
