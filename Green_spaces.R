@@ -188,8 +188,8 @@ ggplot(data = green_hab, aes(house_status,n, fill=access_green)) +
 
 # Regression
 cd_reg <- cd_sf[c("ID", "access_green","income","house_independant",
-                  "house_status", "common_entry", "odour", "PM2_5", "incident","children_number","SC","ST","OBC","General",
-                  "Other","religion","colony", "euc_distance_park")] %>%
+                  "house_status", "common_entry", "odour","incident","children_number","SC","ST","OBC","General",
+                  "Other","religion","colony", "euc_distance_park", "PM2_5", "PM2_5_US")] %>%
   na.omit() #shortlisting a certain set of varables to include in the regression, based on potential explanatory power
 #Reformat certain variables into binary values
 cd_reg$access_green <- ifelse(cd_reg$access_green=="Yes",1,0) 
@@ -249,6 +249,9 @@ cd_reg$park500 <- ifelse(cd_reg$euc_distance_park < 500,"1", "0")
 cd_reg$nopark250 <- ifelse(cd_reg$euc_distance_park > 250,"1", "0")
 cd_reg$nopark500 <- ifelse(cd_reg$euc_distance_park > 500,"1", "0")
 
+#Building a variable to see whether the area is more polluted than a baseline measure at the same time (US Embassy)
+#cd_reg <- cd_reg %>% subset(PM2_5_US != "-999") #Removing the flawed measures from the US Embassy
+cd_reg <- cd_reg %>% mutate(PMdiff = as.numeric(PM2_5 - PM2_5_US))
 
 #Keeping only religious belonging with sufficient individuals in the sample
 cd_reg <- cd_reg %>% subset(religion %in% c("Hindu", "Sikh", "Christian", "Jain", "Muslim"))
@@ -266,7 +269,10 @@ cd_reg <- na.omit(cd_reg)
 #Fiting the regression model
 fit_green <- glm(access_green ~ house_status + 
                    #house_independant + common_entry + 
-                   children_number + odour + PM2_5 + incident + caste + religion + 
+                   children_number + odour + 
+                   PM2_5 + 
+                   #PMdiff +
+                   incident + caste + religion + 
                    nopark500 +
                    #nopark250 +
                    #nopark500Google +
@@ -324,6 +330,7 @@ dwplot(fit_green, show_intercept = TRUE,
                        "house_statusGovernment Quarters" = "Logement: Government quarters",
                        "children_number" = "Nombre d'enfants",
                        "odour" = "Présence d'une odeur déplaisante",
+                       "PM2_5" = "Niveau de particules fines (PM2.5)",
                        "incident" = "Occurence d'un incident récent",    
                        "casteOBC" = "Caste: Other Backward Class",
                        "casteSC" = "Caste: Schedule Caste",
