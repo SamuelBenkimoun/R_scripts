@@ -31,6 +31,10 @@ plot(convex)
 convex <- convex %>%
   mutate(colony_id = as.numeric(factor(colony)))
 
+# Keeping the centroids of the convex enveloppes for labelling purpose when mapping
+convex_centroids <- st_centroid(convex) %>% st_coordinates() %>%
+  as.data.frame()
+
 # Create a color palette based on the 'colony' attribute
 custom_palette <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))(length(convex$colony))
 pal <- colorFactor(palette = custom_palette, domain = unique(convex$colony))
@@ -104,7 +108,7 @@ cd_sf$income <- factor(cd_sf$income, exclude=NULL, levels = c(
   "110,000 and above"))
 
 # Create a new variable 'income_merged' to reduce the number of levels
-cd_sf$income_merged <- cd_sf$income
+cd_sf$income_merged <- as.character(cd_sf$income) # Converting it into character to be able to modify it with values which are not part of the actual factor levels
 cd_sf$income_merged[cd_sf$income_merged %in% c("30,000 to 40,000", "40,000 to 50,000")] <- "30,000 to 50,000"
 cd_sf$income_merged[cd_sf$income_merged %in% c("50,000 to 60,000", "60,000 to 70,000")] <- "50,000 to 70,000"
 cd_sf <- mutate(cd_sf, income_merged = as.factor(income_merged))
@@ -133,8 +137,8 @@ palette_income <- leaflet::colorFactor(
 
 # Create Leaflet map for income
 leaflet() %>%
-  addProviderTiles(providers$Esri.WorldImagery) %>%
-  #addProviderTiles(providers$CartoDB.Positron) %>%
+  #addProviderTiles(providers$Esri.WorldImagery) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
   addPolygons(data = nct, color = "black", weight = 4, fill = FALSE) %>%
   setView(lng = mean(st_coordinates(cd_sf)[, "X"]), 
           lat = mean(st_coordinates(cd_sf)[, "Y"]), 
@@ -148,6 +152,11 @@ leaflet() %>%
               color = "black",
               weight = 2, 
               fillOpacity = 0) %>%
+  addLabelOnlyMarkers(data = convex, 
+                      lat = convex_centroids$Y,  # Accessing Y coordinates
+                      lng = convex_centroids$X,  # Accessing X coordinates
+                      label = ~colony,  # Label based on colony attribute
+                      labelOptions = labelOptions(noHide = TRUE, opacity = 0.8)) %>%
   addCircleMarkers(data = cd_sf, 
                    radius = 2.5, 
                    color = "black",
@@ -155,11 +164,6 @@ leaflet() %>%
                    fillColor = ~palette_income(income_merged),  # Use palette_income directly
                    fillOpacity = 0.7,
                    popup = ~paste("Colony:", colony, "<br>", "Income:", income_merged)) %>%
-  #addLegend(position = "bottomright", 
-  #          pal = palette_income, 
-  #          values = c(levels(cd_sf$income_merged), NA),
-  #          title = "Income Levels",
-  #          opacity = 1) %>%
   addLegendFactor(pal = palette_income, 
                   values = factor(cd_sf$income_merged, exclude=NULL, levels = c(
                     "Less than 2,000 Rs/month",
@@ -172,7 +176,8 @@ leaflet() %>%
                     "70,000 to 110,000",
                     "110,000 and above")),
                   title = "Levels of monthly income by household (in rupees):",
-                  position = 'topright') %>%
+                  position = 'topright',
+                  shape = 'circle') %>%
   addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
 
 # Transforming the count into percentages by areas
@@ -443,29 +448,32 @@ ggplot(cd_sf %>% filter (!is.na(income)), aes(x = income_french)) +
     panel.grid.minor = element_line(color = "gray90", size = 0.25) 
   ) +
   # Caption
-  labs(caption = "Source: CHALLINEQ dataset 2020-2022; Auteur: Samuel Benkimoun, 2024.") # Texte en bas indiquant la source
+  labs(caption = "Source: CHALLINEQ dataset 2020-2022; Auteur: Samuel Benkimoun, 2024.") # Text box to indicate the source and author
+
+
+#ANOVA (just in case)
 
 # Isolating the data about income and area where the households are located
 data_income <- cd_sf %>% st_drop_geometry() %>% 
   select(colony, income) %>% 
   filter(!is.na(income))
-
 # Recode the income levels by ranking, where 1 is the smaller income bracket, and 9 the highest
 data_income <- data_income %>%
   mutate(income_numeric = as.numeric(income))
-
-# Testing that the variable doesn't follow a normal distribution:
-shapiro.test(data_income$income_numeric) # here it doesn't, so the ANOVA might not be the preferred analysis
-
-# Running the ANOVA and checking the results (just in case)
+# Checking the average income bracket
+data_income$income_numeric %>% mean()
+# Testing if the variable follows a normal distribution:
+stats::shapiro.test(data_income$income_numeric) # here it doesn't, so the ANOVA might not be the preferred analysis
+# Running the ANOVA and checking the results
 anova_result <- stats::aov(income_numeric ~ colony, data = data_income)
 summary(anova_result)
 
 # Kruskal test, non parametric alternative to the ANOVA test, to compare the average delcared income between the different areas and see whether there is significant difference between them
-kruskal <- kruskal.test(as.numeric(income_numeric) ~ colony, data = data_income)
+kruskal <- kruskal.test(income_numeric ~ colony, data = data_income)
 kruskal
 # Post-hoc Dunn test to check the pairs that significantly defer from one another
-dunn <- rstatix::dunn_test(income_numeric ~ colony, data = data_income, p.adjust.method = "bonferroni")
+dunn <- rstatix::dunn_test(income_numeric ~ colony, data = data_income, p.adjust.method = "bonferroni") %>% 
+  arrange(p.adj)
 View(dunn)
 
 # Having a look at the mean and standard deviation by area in order to map it, and get indications about spatial inequalities and heterogeneity
@@ -475,3 +483,26 @@ data_income %>%
   print(n=41) %>% View()
 
 plot(merge(convex, data_income)["income_numeric"])
+
+
+# Test Moran Index
+cd_sf_filtered_income <- cd_sf %>% filter(!is.na(income_merged))
+# Créer une matrice de voisinage (k plus proches voisins)
+nb <- knn2nb(knearneigh(st_coordinates(cd_sf_filtered_income), k = 4))
+# Convertir en liste de poids
+lw <- nb2listw(nb, style = "W")
+# Calculer Moran's I
+moran_test <- moran.test(as.numeric(cd_sf_filtered_income$income_merged), lw)
+# Afficher les résultats
+print(moran_test)
+
+# Correlation test (Spearman rankings) between income level et formal educaiton level ?
+cd$formal_education <- factor(cd$formal_education, levels = c("No school", 
+                                                              "Primary school - 1st to 5th", 
+                                                              "High school - 6th to 8th", 
+                                                              "High secondary - 9th to 12th", 
+                                                              "Post secondary - college and above"), 
+                              ordered = TRUE, exclude=NULL)
+cd_cor <- cd[!is.na(cd$formal_education) & !is.na(cd$income), ]
+cor(as.numeric(cd_cor$formal_education), as.numeric(cd_cor$income), method = "spearman", use = "complete.obs") %>% print()
+rm(cd_cor)
