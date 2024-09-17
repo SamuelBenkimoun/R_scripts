@@ -52,12 +52,12 @@ create_flow_map <- function(dt, nct, flow_column, max_flow) {
 # Setting the opacity
 dt <- dt %>% mutate(opacity = 1 - (1/((wd.9h30pm/50)+1))) # TO MODIFY IN CASE NEW MAP NEEDED
 
-#create_flow_map(dt, nct, "wd.9h30pm", max_flow)
+#create_flow_map(dt, nct, "wd.1h30pm", max_flow)
 
 ## Reducing the data to make it readable
 
 #Checking the Lorenz curve of people moving to see where the threshold could be to gather the max information with the min flows
-lorenz_curve <- Lc(dt$wd.9h30pm)
+lorenz_curve <- Lc(dt$wd.1h30pm)
 plot(
   lorenz_curve,
   main = "Courbe de Lorenz (Semaine ?? Week-end ??)",
@@ -71,13 +71,13 @@ plot(
 
 # Observing the cumulated frequence
 cumulative_data <- dt %>%
-  filter(!is.na(wd.9h30pm)) %>%
-  arrange(wd.9h30pm) %>%
+  filter(!is.na(wd.1h30pm)) %>%
+  arrange(wd.1h30pm) %>%
   mutate(CumulativeFrequency = cumsum(rep(1, n())),,
          CumulativePercentage = (CumulativeFrequency / n()) * 100) %>%
-  select(wd.9h30pm, CumulativePercentage)
+  select(wd.1h30pm, CumulativePercentage)
 
-ggplot(subset(cumulative_data, wd.9h30pm > 0), aes(x = wd.9h30pm, y = CumulativePercentage)) +
+ggplot(subset(cumulative_data, wd.1h30pm > 0), aes(x = wd.1h30pm, y = CumulativePercentage)) +
   geom_line(color = "blue") +
   geom_point(color = "blue") +
   labs(
@@ -91,14 +91,14 @@ ggplot(subset(cumulative_data, wd.9h30pm > 0), aes(x = wd.9h30pm, y = Cumulative
 # Selecting only the main flow outgoing for each tile
 dt_filtered <- dt %>%
   group_by(origin_lon, origin_lat) %>%
-  slice_max(wd.9h30pm, n = 1, with_ties = FALSE) %>% # TO MODIFY IN CASE NEW MAP NEEDED
+  slice_max(wd.1h30pm, n = 1, with_ties = FALSE) %>% # TO MODIFY IN CASE NEW MAP NEEDED
   ungroup()
 
-#create_flow_map(dt_filtered, nct, "wd.9h30pm", max_flow)
+#create_flow_map(dt_filtered, nct, "wd.1h30pm", max_flow)
 
 # Retaining flows above 60 users
 dt_high_flows <- dt %>%
-  filter(wd.9h30pm > 60) # TO MODIFY IN CASE NEW MAP NEEDED
+  filter(wd.1h30pm > 60) # TO MODIFY IN CASE NEW MAP NEEDED
 
 #Combine `dt_filtered` with `dt_high_flows` using `bind_rows`
 dt_combined <- bind_rows(dt_filtered, dt_high_flows) %>% # TO RUN IN CASE NEW MAP NEEDED
@@ -106,33 +106,32 @@ dt_combined <- bind_rows(dt_filtered, dt_high_flows) %>% # TO RUN IN CASE NEW MA
   distinct()
 
 #Checking the share of the moving population covered with the "combined" filtered dataset
-sum(dt_combined$wd.9h30pm)/sum(dt$wd.9h30pm)
+sum(dt_combined$wd.1h30pm)/sum(dt$wd.1h30pm)
 
 #Mapping the combined dataset
-#create_flow_map(dt_combined, nct, "wd.9h30pm", max_flow)
+#create_flow_map(dt_combined, nct, "wd.1h30pm", max_flow)
 
-# Group by destination latitude and longitude, then summarize by summing `wd.9h30pm`
+# Group by destination latitude and longitude, then summarize by summing `wd.1h30pm`
 dt_grouped_by_destination <- aggregate(
-  wd.9h30pm ~ dest_lat + dest_lon, # TO MODIFY IN CASE NEW MAP NEEDED
+  wd.1h30pm ~ dest_lat + dest_lon, # TO MODIFY IN CASE NEW MAP NEEDED
   data = dt, 
   FUN = sum, 
   na.rm = TRUE
 )
-sd(dt_grouped_by_destination$wd.9h30pm)/mean(dt_grouped_by_destination$wd.9h30pm)
-
-#Filtrering the dop destinations 
+sd(dt_grouped_by_destination$wd.1h30pm)/mean(dt_grouped_by_destination$wd.1h30pm)
+#Filtrering the top destinations 
 dt_dest_filtered <- dt_grouped_by_destination %>%
-  slice_max(order_by = wd.9h30pm, n = 25) # TO MODIFY IN CASE NEW MAP NEEDED
+  slice_max(order_by = wd.1h30pm, n = 25) # TO MODIFY IN CASE NEW MAP NEEDED
 print(dt_dest_filtered)
-create_flow_map(dt_combined, nct, "wd.9h30pm", max_flow)%>% # TO MODIFY IN CASE NEW MAP NEEDED
+create_flow_map(dt_combined, nct, "wd.1h30pm", max_flow)%>% # TO MODIFY IN CASE NEW MAP NEEDED
   addCircleMarkers(
     data = dt_dest_filtered,
     lng = ~dest_lon, lat = ~dest_lat,
-    radius = ~sqrt(wd.9h30pm) / 10,  # TO MODIFY IN CASE NEW MAP NEEDED
+    radius = ~sqrt(wd.1h30pm) / 10,  # TO MODIFY IN CASE NEW MAP NEEDED
     color = 'red',
     fillOpacity = 0.7,
     stroke = FALSE,
-    popup = ~paste("Incoming people:", wd.9h30pm) # TO MODIFY IN CASE NEW MAP NEEDED
+    popup = ~paste("Incoming people:", wd.1h30pm) # TO MODIFY IN CASE NEW MAP NEEDED
   ) %>% setView(lat = 28.65239, lng = 77.17896, zoom = 10)
 
 #dt_combined_wd.5h30am <- dt_combined
@@ -300,7 +299,7 @@ rsd(dt$we.1h30pm)
 rsd(dt$we.9h30pm)
 
 ### NETWORK ANALYSIS
-#dt_combined <-  dt_combined_wd.5h30am
+dt_combined <-  dt_combined_wd.5h30am
 dt_combined %>% head()
 dt_combined <- dt_combined %>% mutate(wd.5h30am = 
                                         ifelse(wd.5h30am <= 0, 1, wd.5h30am)) ## TO ADAPT IN CASE OF A CHANGE IN TIMESTEP
@@ -348,7 +347,9 @@ filter(paste0(dest_lon, "-", dest_lat) == setdiff(V(g)$name, nodes$node_id)) %>%
 nodes <- bind_rows(nodes,
                   data.frame(lon = missing_node$dest_lon,
           lat = missing_node$dest_lat,
-          subdt = c("Faridabad","Gautam Buddha Nagar"))) #wd.9h30pm
+          subdt = c("Gautam Buddha Nagar"))) #wd.5h30am
+          #subdt = c("Faridabad","Gautam Buddha Nagar"))) #wd.9h30pm #we.5h30
+V(g)$subdt <- nodes$subdt
 
 ## Basic measures on the graph
 # order
@@ -365,6 +366,8 @@ cut_points <- articulation_points(g)
 bridges <- bridges(g)
 # graph density in percentage
 ecount(g)/(vcount(g)*(vcount(g)-1))*100
+# reciprocity
+reciprocity(g)
 
 
 graph_tbl <- as_tbl_graph(g)
@@ -407,6 +410,29 @@ ggraph(g_comp1, layout = "graphopt") +
   annotate("text", x = Inf, y = -Inf, label = "Sources: FB Data For Good, Fev-Mars 2020. Auteur: Samuel Benkimoun. Fait avec igraph, tidygraph et ggraph.", 
                                                              hjust = 1, vjust = -0.5, size = 3, color = "black", fontface = "bold")+
    theme_graph()
+
+nodes_diameter <- subset(nodes, node_id %in% path_diameter$name)
+
+leaflet(data = nodes_diameter) %>%
+  addProviderTiles(providers$CartoDB.DarkMatter) %>%
+  addPolygons(data = nct, color = "white", weight = 4, fill = FALSE) %>%
+  addCircleMarkers(
+    ~lon, ~lat,  
+    color = "red", 
+    stroke = FALSE,  
+    fillOpacity = 0.7, 
+    radius = 5,  
+    popup = ~paste0("Subdistrict: ", subdt)  
+  ) %>%
+  addCircleMarkers(data = nodes_diameter[c(1,nrow(nodes_diameter)),],
+                   ~lon, ~lat,  
+                   color = "yellow", 
+                   stroke = FALSE,  
+                   fillOpacity = 1, 
+                   radius = 10,  
+                   popup = ~paste0("Subdistrict: ", subdt)  
+  ) %>%
+  addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
 
 #clustering global and local
 # Compute local clustering coefficient
@@ -488,7 +514,63 @@ ggraph(g_comp1, layout = "graphopt") +
            hjust = 1, vjust = -0.5, size = 3, color = "black", fontface = "bold")+
   theme_graph()
 
-#community detection
+#Centrality measures: degree, sur gcomp1
+degree_centrality <- degree(g_comp1, mode = "out")
+V(g_comp1)$degree_centrality <- degree_centrality
+
+ggplot(data.frame(degree = degree_centrality), aes(x = degree)) +
+  geom_histogram(binwidth = 1, fill = "lightblue", color = "black") +
+  scale_y_log10() +
+  labs(title = "Distribution des degrés au sein du graphe", subtitle = "Composante 1. Jours de semaine, 5h30-13h30",
+       x = "Degré", y = "Log fréquence (nombre de nœuds)") +
+  theme_minimal()
+
+nodes_degree <- nodes %>% merge(data_frame(
+  node_id = V(g_comp1)$name, 
+  #degree = V(g_comp1)$proximity))
+  degree = V(g_comp1)$degree_centrality))
+
+
+
+colors <- colorNumeric(palette = "inferno", domain = nodes_degree$degree)
+leaflet(data = nodes_degree) %>%
+  addProviderTiles(providers$CartoDB.DarkMatter) %>%
+  addPolygons(data = nct, color = "white", weight = 4, fill = FALSE) %>%
+  addCircleMarkers(
+    ~lon, ~lat,  
+    color = ~colors(degree),  # Associer la couleur à la centralité de degré
+    stroke = FALSE,  
+    fillOpacity = 0.7, 
+    radius = 5,
+    popup = ~paste0("Subdistrict: ", subdt, "<br>Degree: ", degree)  
+  ) %>%
+  addLegend(
+    position = "bottomright",  
+    pal = colors, 
+    values = ~degree,  
+    title = "Degree Centrality"  # Mettre à jour le titre
+  ) %>% 
+  addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
+
+#map bridges
+bridges(g_comp1)
+
+gcomp1_tbl <- as_tbl_graph(g_comp1)
+
+bridges_tidy <- gcomp1_tbl %>% 
+  activate(edges) %>% 
+  filter(edge_is_bridge())
+
+ggraph(gcomp1_tbl, layout = 'fr') +
+  geom_edge_link(aes(color = ifelse(edge_is_bridge(), "red", "gray"), width = ifelse(edge_is_bridge(), 2, 1))) +
+  geom_node_point(size = 5, color = "black") +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_color_identity() +
+  scale_edge_width_identity() +
+  theme_void() +
+  labs(title = "Graphe avec les Ponts Mise en Évidence")
+
+# COMMUNITY DETECTION
 # Using algorithms for direct network (Infomap or Label Propagation)
 communities_infomap <- cluster_infomap(g_comp1, e.weights = E(g_comp1)$weight)
 V(g_comp1)$community <- membership(communities_infomap) 
@@ -572,5 +654,3 @@ leaflet(data = nodes_community) %>%
     title = "Communities" 
   )   %>% 
   addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
-
-
