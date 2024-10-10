@@ -594,29 +594,42 @@ nodes_nct <- left_join(nodes_nct, ag_movement, by="node_id")
 ## Clustering of dengue cases
 dengue_cases <- dengue_cases %>% st_join(grid_weighted[c("node_id", "geometry")]) 
 dengue_cases_grid <- dengue_cases[!is.na(dengue_cases$node_id), ]
-coords <- st_coordinates(dengue_cases_grid)
-min(coords[,1])
-max(coords[,1])
-min(coords[,2])
-max(coords[,2])
-bbox <- st_bbox(dengue_cases_grid)
-dengue_ppp <- ppp(x = coords[, 1], y = coords[, 2], window = owin(c(bbox["xmin"], bbox["xmax"]), 
-                                                                  c(bbox["ymin"], bbox["ymax"])))
 
+#Function needed to extract the results in a table format
+extract_knox_info <- function(knox_result, distance) { 
+  return(data.frame(
+    Distance = distance,
+    Statistic = knox_result$statistic,
+    Expected_null = knox_result$null.value,
+    RR = knox_result$statistic %>% as.numeric()/knox_result$null.value %>% as.numeric(),
+    P_Value = knox_result$p.value,
+    stringsAsFactors = FALSE
+  ))
+}
 # Formating the dates in days since origin format for the tests
 dengue_cases_grid$date_deb <- as.Date(dengue_cases_grid$date_deb)
 origin <- min(dengue_cases_grid$date_deb)
 dengue_cases_grid$days_since_origin <- as.numeric(difftime(dengue_cases_grid$date_deb, origin, units = "days"))
-time_dist <- dist(dengue_cases_grid$days_since_origin)
-space_dist <- dist(st_coordinates(st_transform(dengue_cases_grid,32643))) #okayish crs for meter distance calculation, and keeping the "dist()" function (st_distance returns all the pairs)
+dengue_08 <-dengue_cases_grid %>% subset(year==2008)
+dengue_09 <- dengue_cases_grid %>% subset(year==2009)
+dengue_10 <- dengue_cases_grid %>% subset(year==2010)
+time_dist <- dist(dengue_10$days_since_origin)
+space_dist <- dist(st_coordinates(st_transform(dengue_10,32643))) #okayish crs for meter distance calculation, and keeping the "dist()" function (st_distance returns all the pairs)
 #space_dist <- st_distance(dengue_cases_grid) %>% as.numeric()
+
+parallel::detectCores() # to check how many cores are available
 
 knoxtest <- knox(
   dt = time_dist, eps.t = 21,
-  ds = space_dist, eps.s = 100,
-  simulate.p.value = TRUE, B = 99, #number of Monte-Carlo
-  .parallel = 4, .seed = 1, .verbose = TRUE
+  ds = space_dist, eps.s = 2000,
+  simulate.p.value = TRUE, 
+  B = 300, #number of Monte-Carlo
+  .parallel = 5, # TO BE ADAPTED BASED ON THE NUMBER OF AVAILABLE CORES ON THE MACHINE !!
+  .seed = 1, .verbose = TRUE
 )
+knoxtest
+knoxtest_all_euc_750 <- knoxtest #500m 21j
+knoxtest_all_euc_500 <- knoxtest #500m 21j
 knoxtest_all_euc_400 <- knoxtest #400m 21j
 knoxtest_all_euc_300 <- knoxtest #300m 21j
 knoxtest_all_euc_200 <- knoxtest #200m 21j
@@ -624,26 +637,152 @@ knoxtest_all_euc_100 <- knoxtest #100m 21j
 knoxtest_all_euc_50 <- knoxtest #50m 21j
 knoxtest_all_euc_25 <- knoxtest #25m 21j
 
+results_list <- list()
+results_list[[1]] <- extract_knox_info(knoxtest_all_euc_500, "500m")
+results_list[[2]] <- extract_knox_info(knoxtest_all_euc_400, "400m")
+results_list[[3]] <- extract_knox_info(knoxtest_all_euc_300, "300m")
+results_list[[4]] <- extract_knox_info(knoxtest_all_euc_200, "200m")
+results_list[[5]] <- extract_knox_info(knoxtest_all_euc_100, "100m")
+results_list[[6]] <- extract_knox_info(knoxtest_all_euc_50, "50m")
+results_list[[7]] <- extract_knox_info(knoxtest_all_euc_25, "25m")
+
+final_results <- do.call(rbind, results_list)
+final_results
+#final_results_eucdist_08 <- final_results
+#final_results_eucdist_09 <- final_results
+final_results_eucdist_10 <- final_results
+write.csv(final_results, "./Dengue Sp Analysis These Redac/knoxtest_results_euc_distance_10.csv", row.names = FALSE)
+
 #rescaling the weights based on physical max distance, so that the smallest people flow = max dist
 max_dist <- subset(dt, dt$L3_NAME_s %in% edges_nct$L3_NAME_s & dt$L3_NAME_n %in% edges_nct$L3_NAME_n) %>% st_transform(32643) %>% st_length() %>% max() %>% as.numeric()
 min_dist <- subset(dt, dt$L3_NAME_s %in% edges_nct$L3_NAME_s & dt$L3_NAME_n %in% edges_nct$L3_NAME_n) %>% st_transform(32643) %>% st_length() %>% min() %>% as.numeric()
 
-E(g)$weight %>% median()
+E(g)$weight %>% median() 
 E(g)$weight %>% sd()
 threshold = quantile(E(g)$weight)[4] %>% as.numeric()
 k = 300/(1/threshold)
-dist_matrix <- distances(g, weights = 1/E(g)$weight*k)
+dist_matrix <- igraph::distances(g, weights = 1/E(g)$weight*k)
 pairwise_matrix <- expand.grid(row = rownames(dist_matrix), col = colnames(dist_matrix))
 pairwise_matrix$distance <- as.vector(dist_matrix)
 
 # getting all the combinations to attach the distance
-pairwise <- combn(dengue_cases_grid$node_id, 2, simplify = FALSE, .parallel =5)
+pairwise <- combn(dengue_cases_grid$node_id, 2, simplify = FALSE, .parallel =6)
 pairwise <- do.call(rbind, lapply(pairwise, function(x) data.frame(row = x[1], col = x[2], stringsAsFactors = FALSE)))
 
-n=0
-for(i in 1:8089) {
-  n=n+(8089-i)
-    }
+space_dist <- pairwise %>%
+  left_join(pairwise_matrix, by = c("row" = "row", "col" = "col"))
+
+### START OVER FROM HERE TO RUN THE TEST AGAIN
+dengue_08_unique <- dengue_08 %>%
+  group_by(node_id) %>%
+  slice_min(date_deb) %>%  # Keep the row with the earliest date_deb
+  slice_min(order_by = OBJECTID, with_ties = FALSE) %>% # In case two cases are reported at the same date in a same tile
+  ungroup()
+#time_dist <- dist(dengue_cases_grid$days_since_origin)
+time_dist <- dist(dengue_08_unique$days_since_origin)
+pairwise <- combn(dengue_08_unique$node_id, 2, simplify = FALSE, .parallel =6)
+pairwise <- do.call(rbind, lapply(pairwise, function(x) data.frame(row = x[1], col = x[2], stringsAsFactors = FALSE)))
+space_dist <- pairwise %>%
+  left_join(pairwise_matrix, by = c("row" = "row", "col" = "col"))
+
+## TO ADDITIONNALY PUNDERATE THE DISTANCE WITH THE FORCE OF INFECTION
+tile_annual_count_08 <- dengue_08["node_id"] %>% 
+  group_by(node_id) %>% 
+  count() %>% 
+  ungroup() %>% 
+  rename(cases = n,
+         row = node_id)
+space_dist <- left_join(space_dist, tile_annual_count_08, by = c("row")) %>%
+  mutate(cases = ifelse(is.na(cases), 0, cases)) %>%
+  mutate(dist_foi_log = distance / log(cases + 1.1), #with log function ?
+         dist_foi = distance / (sqrt(cases)+0.1)) 
+
+
+# Formule = 1/nb_people*39600, so that top 25% flows = 300m
+
+knoxtest <- knox(
+  dt = time_dist, eps.t = 21,
+  ds = space_dist$dist_foi, eps.s =20,
+  simulate.p.value = TRUE, B = 999,  #number of Monte-Carlo replication
+  .parallel = 12, .seed = 1, .verbose = TRUE
+)
+knoxtest
+plot(knoxtest)
+knoxtest_1000_mov <- knoxtest
+knoxtest_500_mov <- knoxtest
+knoxtest_300_mov <- knoxtest #equivalent 300m
+knoxtest_200_mov <- knoxtest #equivalent 200m
+knoxtest_100_mov <- knoxtest #equivalent 100m p-value 0.04
+knoxtest_75_mov <- knoxtest #equivalent 75m p-value 0.01
+knoxtest_50_mov <- knoxtest #equivalent 50m (+- 800 people moving) p-value 0.01
+knoxtest_30_mov <- knoxtest #equivalent 30m (+-) p-value 0.01
+knoxtest_20_mov <- knoxtest #equivalent 20m (+-) p-value 0.01
+knoxtest_15_mov <- knoxtest #equivalent 15m (+-) p-value 0.01
+knoxtest_10_mov <- knoxtest #equivalent 10m (+-) p-value 0.01
+knoxtest_5_mov <- knoxtest #equivalent 10m (+-) p-value 0.01, RR=1,16 environ
+knoxtest_2.5_mov <- knoxtest #equivalent 10m (+-) p-value 0.01, RR=1,16 environ
+
+
+results_list <- list()
+
+results_list[[1]] <- extract_knox_info(knoxtest_1000_mov, "1000m")
+results_list[[2]] <- extract_knox_info(knoxtest_500_mov, "500m")
+results_list[[3]] <- extract_knox_info(knoxtest_300_mov, "300m")
+results_list[[4]] <- extract_knox_info(knoxtest_200_mov, "200m")
+results_list[[5]] <- extract_knox_info(knoxtest_100_mov, "100m")
+results_list[[6]] <- extract_knox_info(knoxtest_75_mov, "75m")
+results_list[[7]] <- extract_knox_info(knoxtest_50_mov, "50m")
+results_list[[8]] <- extract_knox_info(knoxtest_30_mov, "30m")
+results_list[[9]] <- extract_knox_info(knoxtest_20_mov, "20m")
+results_list[[10]] <- extract_knox_info(knoxtest_15_mov, "15m")
+results_list[[11]] <- extract_knox_info(knoxtest_10_mov, "10m")
+results_list[[12]] <- extract_knox_info(knoxtest_5_mov, "5m")
+results_list[[13]] <- extract_knox_info(knoxtest_2.5_mov, "2.5m")
+
+final_results <- do.call(rbind, results_list)
+final_results
+write.csv(final_results, "./Dengue Sp Analysis These Redac/knoxtest_results_movement_unique_grid_logfoi_10.csv", row.names = FALSE)
+
+## PLOT THE RR
+final_results_eucdist_08
+final_results_eucdist_09
+final_results_eucdist_10
+
+# Adding a year column
+final_results_eucdist_08 <- final_results_eucdist_08 %>% mutate(Year = "2008") 
+final_results_eucdist_09 <- final_results_eucdist_09 %>% mutate(Year = "2009")
+final_results_eucdist_10 <- final_results_eucdist_10 %>% mutate(Year = "2010")
+# Combining the three df
+df_combined <- bind_rows(final_results_eucdist_08, final_results_eucdist_09, final_results_eucdist_10)
+
+
+df_combined <- bind_rows(final_results_movement_unique_08 %>% select(c("Distance", "RR", "P_Value")) %>% mutate(Year = "2008"),
+                         final_results_movement_unique_09 %>% select(c("Distance", "RR", "P_Value")) %>% mutate(Year = "2009"),
+                         final_results_movement_unique_10 %>% select(c("Distance", "RR", "P_Value")) %>% mutate(Year = "2010")
+) %>% na.omit()
+
+
+df_combined <- bind_rows(final_results_movement_unique_distfoi_08 %>% mutate(Year = "2008"),
+                         final_results_movement_unique_distfoi_09 %>% mutate(Year = "2009"),
+                         final_results_movement_unique_distfoi_10 %>% mutate(Year = "2010")) 
+
+df_combined$Distance <- as.numeric(gsub("m", "", df_combined$Distance))
+
+# Creating the graph for 
+ggplot(df_combined, aes(x = Distance, y = RR, color = Year)) +
+  geom_line(size = 1) +
+  #geom_point(size = 2) +
+  labs(title = "Risk Ratio (RR) en fonction de la distance potentielle d'infection",
+       subtitle = "Par rapport aux cas index. P-values indiquées pour chaque point de mesure.",
+       x = "Distance",
+       y = "Risk Ratio (RR)") +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_text(aes(label = round(`P_Value`, 3)), vjust = -0.5, size = 3.5) +
+  scale_color_manual(values = c("2008" = "seagreen", "2009" = "royalblue", "2010" = "red")) +
+  #scale_y_continuous(limits = c(1, 1.85)) +
+  theme_linedraw()+
+  theme(legend.title = element_blank())+
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) 
 
 ## Checking the temporal dynamics
 nodes_nct$is_hub_prox <- ifelse(nodes_nct$proximity_tot_jenks == 7, 1, 0)
