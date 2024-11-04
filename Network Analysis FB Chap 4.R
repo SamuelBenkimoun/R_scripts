@@ -12,6 +12,8 @@ library(ggraph)
 
 dt <- st_read("/Users/utilisateur/Documents/Charbon/Geo Data/Delhi Urban Area + Flows Analysis/Mobility Tiles With UA 2/tiles_with_ua.shp")
 nct <- st_read("/Users/utilisateur/Documents/Charbon/Geo Data/NCT_boundaries.gpkg")
+bua15 <- st_read("/Users/utilisateur/Documents/Charbon/Geo Data/Delhi Urban Areas/tacheUrbaineDelhi200.shp") %>%
+  st_transform(4326)
 
 dt <- st_transform(dt, 4326)
 
@@ -85,20 +87,20 @@ ggplot(subset(cumulative_data, wd.1h30pm > 0), aes(x = wd.1h30pm, y = Cumulative
     x = "Nombre de personnes",
     y = "Fréquence cumulée en pourcentage"
   ) +
-  scale_x_log10() + 
+  #scale_x_log10() + 
   theme_minimal()
 
 # Selecting only the main flow outgoing for each tile
 dt_filtered <- dt %>%
   group_by(origin_lon, origin_lat) %>%
-  slice_max(wd.1h30pm, n = 1, with_ties = FALSE) %>% # TO MODIFY IN CASE NEW MAP NEEDED
+  slice_max(wd.5h30am, n = 1, with_ties = FALSE) %>% # TO MODIFY IN CASE NEW MAP NEEDED
   ungroup()
 
 #create_flow_map(dt_filtered, nct, "wd.1h30pm", max_flow)
 
 # Retaining flows above 60 users
 dt_high_flows <- dt %>%
-  filter(wd.1h30pm > 60) # TO MODIFY IN CASE NEW MAP NEEDED
+  filter(wd.5h30am > 60) # TO MODIFY IN CASE NEW MAP NEEDED
 
 #Combine `dt_filtered` with `dt_high_flows` using `bind_rows`
 dt_combined <- bind_rows(dt_filtered, dt_high_flows) %>% # TO RUN IN CASE NEW MAP NEEDED
@@ -106,32 +108,32 @@ dt_combined <- bind_rows(dt_filtered, dt_high_flows) %>% # TO RUN IN CASE NEW MA
   distinct()
 
 #Checking the share of the moving population covered with the "combined" filtered dataset
-sum(dt_combined$wd.1h30pm)/sum(dt$wd.1h30pm)
+sum(dt_combined$wd.5h30am)/sum(dt$wd.5h30am)
 
 #Mapping the combined dataset
 #create_flow_map(dt_combined, nct, "wd.1h30pm", max_flow)
 
 # Group by destination latitude and longitude, then summarize by summing `wd.1h30pm`
 dt_grouped_by_destination <- aggregate(
-  wd.1h30pm ~ dest_lat + dest_lon, # TO MODIFY IN CASE NEW MAP NEEDED
+  wd.5h30am ~ dest_lat + dest_lon, # TO MODIFY IN CASE NEW MAP NEEDED
   data = dt, 
   FUN = sum, 
   na.rm = TRUE
 )
-sd(dt_grouped_by_destination$wd.1h30pm)/mean(dt_grouped_by_destination$wd.1h30pm)
+sd(dt_grouped_by_destination$wd.5h30am)/mean(dt_grouped_by_destination$wd.5h30am)
 #Filtrering the top destinations 
 dt_dest_filtered <- dt_grouped_by_destination %>%
-  slice_max(order_by = wd.1h30pm, n = 25) # TO MODIFY IN CASE NEW MAP NEEDED
+  slice_max(order_by = wd.5h30am, n = 25) # TO MODIFY IN CASE NEW MAP NEEDED
 print(dt_dest_filtered)
 create_flow_map(dt_combined, nct, "wd.1h30pm", max_flow)%>% # TO MODIFY IN CASE NEW MAP NEEDED
   addCircleMarkers(
     data = dt_dest_filtered,
     lng = ~dest_lon, lat = ~dest_lat,
-    radius = ~sqrt(wd.1h30pm) / 10,  # TO MODIFY IN CASE NEW MAP NEEDED
+    radius = ~sqrt(wd.5h30am) / 10,  # TO MODIFY IN CASE NEW MAP NEEDED
     color = 'red',
     fillOpacity = 0.7,
     stroke = FALSE,
-    popup = ~paste("Incoming people:", wd.1h30pm) # TO MODIFY IN CASE NEW MAP NEEDED
+    popup = ~paste("Incoming people:", wd.5h30am) # TO MODIFY IN CASE NEW MAP NEEDED
   ) %>% setView(lat = 28.65239, lng = 77.17896, zoom = 10)
 
 #dt_combined_wd.5h30am <- dt_combined
@@ -236,7 +238,7 @@ create_flow_map_mapdeck <- function(dt, nct, flow_column, mapbox_token) {
 token = "pk.eyJ1Ijoic2JlbmtpbW91biIsImEiOiJja2N5eW03anAwZW5pMnltdjQ2dndld2VhIn0.S7od4ghFgJA-_x6J0Z_bWA"
 create_flow_map_mapdeck(st_drop_geometry(dt), nct, "wd.5h30am", token) 
 
-## Spatiale analysis
+## Spatial analysis
 # Checking the link between spatial proximity and volume of exchanges
 dt <- dt %>% mutate(length = as.numeric(st_length(geometry)))
 ggplot(dt, aes(x = length, y = wd.5h30am)) +
@@ -244,14 +246,14 @@ ggplot(dt, aes(x = length, y = wd.5h30am)) +
   geom_smooth(method = "gam", se = FALSE, color = "red") +
   coord_cartesian(xlim = c(0, 50000))+
   #scale_x_log10()+
-  labs(x = "Distance (mètres)", y = "Volume de populaiton échangée",
+  labs(x = "Distance (mètres)", y = "Volume de population échangée",
        title = "Relation entre longueur des flux et population échangée",
        subtitle = "Jours de semaine, pas de temps 5h30-13h30") +
   theme_minimal()
 cor(dt$length, dt$wd.5h30am, use = "complete.obs")
 cor(dt$length, dt$wd.1h30pm, method = "spearman") #works better than Pearson
 
-# Linear relationship average, son instead we compare the cumulative share of people exchanged with respect to the distance
+# Linear relationship average, so instead we compare the cumulative share of people exchanged with respect to the distance
 dt_grouped_by_length <- dt %>%
   mutate(length = as.numeric(length)) %>%  # Ensure length is numeric
   group_by(length) %>%
@@ -299,7 +301,9 @@ rsd(dt$we.1h30pm)
 rsd(dt$we.9h30pm)
 
 ### NETWORK ANALYSIS
-dt_combined <-  dt_combined_wd.5h30am
+#dt_combined2 <- dt_combined 
+#dt_combined <- dt
+#dt_combined <-  dt_combined_wd.5h30am
 dt_combined %>% head()
 dt_combined <- dt_combined %>% mutate(wd.5h30am = 
                                         ifelse(wd.5h30am <= 0, 1, wd.5h30am)) ## TO ADAPT IN CASE OF A CHANGE IN TIMESTEP
@@ -334,22 +338,7 @@ E(g)$weight <- edges$wd.5h30am # To be adapted depending on the timestep
 E(g)$weight <- ifelse(E(g)$weight == 0, 1, E(g)$weight)
 
 # Adding the subdistrict information as an attribute to the vertices
-V(g)$subdt <- nodes$subdt
-
-# In case some nodes are missing because part of the destinations in the graph, but not in the origines (hence missing in the nodes df) 
-# Once done, the graph has to be regenerated
-setdiff(V(g)$name, nodes$node_id)
-setdiff(nodes$node_id, V(g)$name)
-missing_node <- edges %>%
-filter(paste0(dest_lon, "-", dest_lat) == setdiff(V(g)$name, nodes$node_id)) %>%
- select(dest_lon, dest_lat) %>%
- distinct()
-nodes <- bind_rows(nodes,
-                  data.frame(lon = missing_node$dest_lon,
-          lat = missing_node$dest_lat,
-          subdt = c("Gautam Buddha Nagar"))) #wd.5h30am
-          #subdt = c("Faridabad","Gautam Buddha Nagar"))) #wd.9h30pm #we.5h30
-V(g)$subdt <- nodes$subdt
+V(g)$subdt <- nodes$subdt[match(V(g)$name, nodes$node_id)]
 
 ## Basic measures on the graph
 # order
@@ -368,7 +357,6 @@ bridges <- bridges(g)
 ecount(g)/(vcount(g)*(vcount(g)-1))*100
 # reciprocity
 reciprocity(g)
-
 
 graph_tbl <- as_tbl_graph(g)
 
@@ -521,21 +509,96 @@ V(g_comp1)$degree_centrality <- degree_centrality
 ggplot(data.frame(degree = degree_centrality), aes(x = degree)) +
   geom_histogram(binwidth = 1, fill = "lightblue", color = "black") +
   scale_y_log10() +
+  #scale_x_log10() +
   labs(title = "Distribution des degrés au sein du graphe", subtitle = "Composante 1. Jours de semaine, 5h30-13h30",
        x = "Degré", y = "Log fréquence (nombre de nœuds)") +
   theme_minimal()
+#log-log plot for the degree centrality
+ggplot(table(degree_centrality) %>% 
+         as.data.frame() %>% 
+         mutate(degree_centrality = as.numeric(degree_centrality)), 
+       aes(x = log10(degree_centrality), y = log10(Freq))) +
+  geom_point(shape = 1, size = 2, color = "blue") +
+  labs(x = "Log10(Degré)", y = "Log10(Fréquence)", title = "Log-Log Plot de la distribution de la centralité de degré",
+       subtitle = "Composante 1. Jours de semaine, 5h30-13h30") +
+  theme_minimal() +
+  geom_smooth(method = "lm", se = FALSE, color = "lightblue")
+#log-log plot for the flow size (comp1)
+ggplot(dt_combined_wd.5h30am$wd.5h30am %>% table() %>%
+         as.data.frame() %>%
+         rename(Var1 = ".") %>%
+         mutate(Var1 = as.numeric(Var1))
+         %>% filter(Var1>60)
+       ,
+       aes(x = log10(Var1), 
+           y = log10(Freq)
+           )) +
+  geom_point(shape = 1, size = 2, color = "blue") +
+  labs(x = "Log10(Taille des flux)", y = "Log10(Fréquence)", title = "Log-Log Plot de la distribution de la taille des flux",
+       subtitle = "Jour de semaine, pas de temps: 5h30-13h30") +
+  theme_minimal() +
+  geom_smooth(method = "lm", se = FALSE, color = "lightblue")
+#log-log plot for flow size (total)
+ggplot(dt$wd.5h30am %>% table() %>%
+         as.data.frame() %>%
+         rename(Var1 = ".") %>%
+         mutate(Var1 = as.numeric(Var1))
+       %>% filter(Var1>10)
+       ,
+       aes(x = log10(Var1), 
+           y = log10(Freq)
+       )) +
+  geom_point(shape = 1, size = 2, color = "blue") +
+  labs(x = "Log10(Taille des flux)", y = "Log10(Fréquence)", title = "Log-Log Plot de la distribution de la taille des flux",
+       subtitle = "Jour de semaine, pas de temps: 5h30-13h30") +
+  theme_minimal() +
+  geom_smooth(method = "lm", se = FALSE, color = "lightblue")
+#log-log plot total incoming
+ggplot(dt_grouped_by_destination$wd.5h30am %>% table() %>%
+         as.data.frame() %>%
+         rename(Var1 = ".") %>%
+         mutate(Var1 = as.numeric(Var1))
+       #%>% filter(Var1>10)
+       ,
+       aes(x = log10(Var1), 
+           y = log10(Freq)
+       )) +
+  geom_point(shape = 1, size = 2, color = "blue") +
+  labs(x = "Log10(Total flux entrants)", y = "Log10(Fréquence)", title = "Log-Log Plot du total de flux entrants par unité",
+       subtitle = "Jour de semaine, pas de temps: 5h30-13h30") +
+  theme_minimal() +
+  geom_smooth(method = "lm", se = FALSE, color = "lightblue")
+3#log-log plot total incoming comp_1
+nodes_sum_incoming <- as.data.frame(as_edgelist(g_comp1, names = TRUE)) %>%
+  rename(from = V1, to = V2)
+nodes_sum_incoming$weight <- E(g_comp1)$weight
+nodes_sum_incoming <- nodes_sum_incoming %>% group_by(to) %>%
+  summarise(total_flows = sum(weight))
+ggplot(nodes_sum_incoming$total_flows %>% table() %>%
+         as.data.frame() %>%
+         rename(Var1 = ".") %>%
+         mutate(Var1 = as.numeric(Var1))
+       ,
+       aes(x = log10(Var1), 
+           y = log10(Freq)
+       )) +
+  geom_point(shape = 1, size = 2, color = "blue") +
+  labs(x = "Log10(Flux entrant)", y = "Log10(Fréquence)", title = "Log-Log Plot du total entrant",
+       subtitle = "Jour de semaine, pas de temps: 5h30-13h30") +
+  theme_minimal() +
+  geom_smooth(method = "lm", se = FALSE, color = "lightblue")
+
 
 nodes_degree <- nodes %>% merge(data_frame(
   node_id = V(g_comp1)$name, 
   #degree = V(g_comp1)$proximity))
   degree = V(g_comp1)$degree_centrality))
 
-
-
 colors <- colorNumeric(palette = "inferno", domain = nodes_degree$degree)
 leaflet(data = nodes_degree) %>%
   addProviderTiles(providers$CartoDB.DarkMatter) %>%
   addPolygons(data = nct, color = "white", weight = 4, fill = FALSE) %>%
+  addPolygons(data = bua15, color = "red", weight = 4, fill = FALSE) %>%
   addCircleMarkers(
     ~lon, ~lat,  
     color = ~colors(degree),  # Associer la couleur à la centralité de degré
@@ -575,7 +638,7 @@ ggraph(gcomp1_tbl, layout = 'fr') +
 communities_infomap <- cluster_infomap(g_comp1, e.weights = E(g_comp1)$weight)
 V(g_comp1)$community <- membership(communities_infomap) 
 
-communities_label_prop <- cluster_label_prop(g_comp1)
+communities_label_prop <- cluster_label_prop(g_comp1, weights = E(g_comp1)$weight)
 V(g_comp1)$community <- membership(communities_label_prop) 
 
 # Select communities whose size is > 1
@@ -597,10 +660,12 @@ ggraph(g_comp1_filtered, layout = "graphopt") +
   theme_graph()
 
 # Attempt with an undericted graph of the component 1 to use a Louvain algorithm, Leiden, Cluster Optimal
-g_undirected <- as.undirected(g_comp1, mode = "collapse", edge.attr.comb = "mean")
+g_undirected <- as.undirected(g_comp1, mode = "collapse", edge.attr.comb = "mean") #Median, can be tested with sums ?
 
 communities_louvain <- cluster_louvain(g_undirected, weights = E(g_undirected)$weight)
 V(g_undirected)$community <- communities_louvain$membership
+modularity(g_undirected, V(g_undirected)$community, weights = E(g_undirected)$weight)
+vertex_attr(g_undirected) %>% as.data.frame() %>% write_csv("../../Community_detection_Louvain_Composante1_NCR.csv") #path to be adapted
 
 communities_leiden <- cluster_leiden(g_undirected, weights = E(g_undirected)$weight)
 V(g_undirected)$community <- communities_leiden$membership
@@ -639,6 +704,7 @@ leaflet(data = nodes_community) %>%
   addProviderTiles(providers$CartoDB.DarkMatter) %>%
   # Add the NCT outline
   addPolygons(data = nct, color = "white", weight = 4, fill = FALSE) %>%
+  addPolygons(data = bua15, color = "red", weight = 4, fill = FALSE) %>%
   addCircleMarkers(
     ~lon, ~lat,  
     color = ~colors[community], 
