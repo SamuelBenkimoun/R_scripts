@@ -4,7 +4,7 @@ library(giscoR)
 library(ggplot2)
 library(ggthemes)
 library(ggrepel)
-install.packages("ggdark")
+library(ggdark)
 # Loading the survey data on the students' travelling preferences
 dest <- read_excel("CartoStatsEnqueteDestinations.xlsx", 
                                             col_types = c("text", "numeric"))
